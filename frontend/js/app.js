@@ -9,7 +9,8 @@ let state = {
     myUsername: null,
     myKeys: null,
     currentTargetUser: null,
-    usersDirectory: {}
+    usersDirectory: {},
+    chatHistory: {}
 };
 
 async function joinChat() {
@@ -43,20 +44,49 @@ async function joinChat() {
                 data.users.forEach(u => state.usersDirectory[u.username] = u.public_key);
                 
                 // Render the interface
-                renderUsersList(data.users, state.myUsername, (selectedUser) => {
-                    state.currentTargetUser = selectedUser;
-                    activateChatPanel(selectedUser);
-                });
+                renderUsersList(data.users, state.myUsername, switchChat);
             } 
             else if (data.type === "message") {
                 const encryptedBytes = new Uint8Array(data.content);
                 const decryptedText = await decryptMessage(state.myKeys.privateKey, encryptedBytes);
-                appendMessage(data.from, decryptedText, "incoming");
+                processMessage(data.from, data.from, decryptedText, "incoming");
             }
         },
         // onClose
         () => updateStatus("Disconnected", "text-red-500")
     );
+}
+
+// Function to add a message to memory and (if necessary) render it to the screen
+function processMessage(chatPartner, sender, text, type) {
+    // 1. If no history with this user -> create an empty array
+    if (!state.chatHistory[chatPartner]) {
+        state.chatHistory[chatPartner] = [];
+    }
+
+    // 2. Save message to memory
+    state.chatHistory[chatPartner].push({ sender, text, type });
+
+    // 3. If this specific chat is currently open on the screen —> render it
+    if (state.currentTargetUser === chatPartner) {
+        appendMessage(sender, text, type);
+    }
+}
+
+// Switches the active chat window to the selected user
+function switchChat(username) {
+    state.currentTargetUser = username;
+    activateChatPanel(username); // Unlocks the UI (function from ui.js)
+    
+    // 1. Clear current screen
+    DOM.messagesDiv.innerHTML = ""; 
+
+    // 2. If history exists, render all previous messages
+    if (state.chatHistory[username]) {
+        state.chatHistory[username].forEach(msg => {
+            appendMessage(msg.sender, msg.text, msg.type);
+        });
+    }
 }
 
 // Make function globally available for the HTML button
@@ -75,7 +105,7 @@ window.handleSendMessage = async function() {
         content: encryptedArray
     });
 
-    appendMessage("You", text, "outgoing");
+    processMessage(state.currentTargetUser, "Вы", text, "outgoing");
     DOM.messageInput.value = "";
 }
 
