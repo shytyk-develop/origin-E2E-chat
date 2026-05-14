@@ -1,5 +1,9 @@
 // frontend/js/app.js
 
+import { DOM, hideLoginShowChat, updateStatus, renderUsersList, activateChatPanel, appendMessage } from './ui.js';
+import { connectToServer, sendPacket } from './network.js';
+import { generateKeyPair, exportPublicKey, importPublicKey, encryptMessage, decryptMessage } from './crypto.js';
+
 let socket = null;
 let state = {
     myUsername: null,
@@ -75,4 +79,5 @@ window.handleSendMessage = async function() {
     DOM.messageInput.value = "";
 }
 
-window.joinChat = joinChat; // Make available for the login button
+DOM.loginModal.querySelector('button').addEventListener('click', joinChat); // Make available for the login button
+DOM.sendBtn.addEventListener('click', handleSendMessage); // Make available for the send button

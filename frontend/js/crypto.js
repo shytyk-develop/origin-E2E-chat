@@ -1,7 +1,7 @@
 // frontend/js/crypto.js
 
 /* 1. Generate key pair: Public (for everyone) and Private (for us only) */
-async function generateKeyPair() {
+export async function generateKeyPair() {
     const keyPair = await window.crypto.subtle.generateKey(
         {
             name: "RSA-OAEP", // Standard asymmetric encryption algorithm
@@ -18,7 +18,7 @@ async function generateKeyPair() {
 }
 
 /* 2. Encrypt message (Using the recipient's PUBLIC key) */
-async function encryptMessage(publicKey, textMessage) {
+export async function encryptMessage(publicKey, textMessage) {
     // Convert plain text into a byte array
     const encoder = new TextEncoder();
     const encodedData = encoder.encode(textMessage);
@@ -37,7 +37,7 @@ async function encryptMessage(publicKey, textMessage) {
 }
 
 /* 3. Decrypt a message (Using our own PRIVATE key) */
-async function decryptMessage(privateKey, encryptedBuffer) {
+export async function decryptMessage(privateKey, encryptedBuffer) {
     // Decrypt
     const decryptedBuffer = await window.crypto.subtle.decrypt(
         {
@@ -56,7 +56,7 @@ async function decryptMessage(privateKey, encryptedBuffer) {
 }
 
 /* 4. Key Export: converting CryptoKey into a standard JSON (to send it over the network) */
-async function exportPublicKey(key) {
+export async function exportPublicKey(key) {
     const exportedKey = await window.crypto.subtle.exportKey(
         "jwk", // JSON Web Key format
         key
@@ -65,7 +65,7 @@ async function exportPublicKey(key) {
 }
 
 /* 5. Key Import: converting the received JSON back into a CryptoKey (to use for encryption) */
-async function importPublicKey(jwkData) {
+export async function importPublicKey(jwkData) {
     const importedKey = await window.crypto.subtle.importKey(
         "jwk",
         jwkData,

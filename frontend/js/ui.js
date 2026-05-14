@@ -1,6 +1,6 @@
 // frontend/js/ui.js
 
-const DOM = {
+export const DOM = {
     loginModal: document.getElementById('loginModal'),
     mainApp: document.getElementById('mainApp'),
     statusSpan: document.getElementById('status'),
@@ -12,12 +12,12 @@ const DOM = {
     usernameInput: document.getElementById('usernameInput')
 };
 
-function hideLoginShowChat() {
+export function hideLoginShowChat() {
     DOM.loginModal.classList.add('hidden');
     DOM.mainApp.classList.remove('hidden');
 }
 
-function updateStatus(status, colorClass) {
+export function updateStatus(status, colorClass) {
     DOM.statusSpan.textContent = status;
     DOM.statusSpan.className = `${colorClass} text-sm`;
 }
@@ -28,7 +28,7 @@ function updateStatus(status, colorClass) {
  * @param {string} myUsername - The current user's name to skip in the list
  * @param {Function} onUserSelect - Callback function when a user is clicked
  */
-function renderUsersList(users, myUsername, onUserSelect) {
+export function renderUsersList(users, myUsername, onUserSelect) {
     DOM.usersListDiv.innerHTML = "";
     users.forEach(user => {
         if (user.username === myUsername) return;
@@ -41,14 +41,14 @@ function renderUsersList(users, myUsername, onUserSelect) {
     });
 }
 
-function activateChatPanel(username) {
+export function activateChatPanel(username) {
     DOM.chatWithTitle.textContent = `Chat with: ${username}`;
     DOM.messageInput.disabled = false;
     DOM.sendBtn.disabled = false;
     DOM.sendBtn.className = "bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-semibold transition-colors text-white";
 }
 
-function appendMessage(sender, text, type) {
+export function appendMessage(sender, text, type) {
     const msgElement = document.createElement("div");
     
     if (type === "outgoing") {
