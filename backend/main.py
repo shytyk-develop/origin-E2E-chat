@@ -1,44 +1,27 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from typing import List
+import json
+from backend.ws_manager import manager
 
 app = FastAPI()
 
-# Class for managing connections
-class ConnectionManager:
-    def __init__(self):
-        # List of all active clients
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        # Accept connection and add it to the list
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        # Remove connection from the list if disconnected
-        self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: str, sender: WebSocket):
-        # Broadcast the message to everyone except sender
-        for connection in self.active_connections:
-            if connection != sender:
-                await connection.send_text(message)
-
-# Create a "manager" instance for our application
-manager = ConnectionManager()
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    # 1. A new client connects
+    # New client connects
     await manager.connect(websocket)
     try:
         while True:
-            # 2. Wait for message from this client
-            message = await websocket.receive_text()
+            data_str = await websocket.receive_text()
+            data = json.loads(data_str)
             
-            # 3. Once received, broadcast to others
-            await manager.broadcast(message, sender=websocket)
+            if data["type"] == "join":
+                manager.active_connections[websocket]["username"] = data["username"]
+                manager.active_connections[websocket]["public_key"] = data["public_key"]
+                await manager.broadcast_users_list()
+                
+            elif data["type"] == "message":
+                await manager.send_personal_message(data, websocket)
             
     except WebSocketDisconnect:
-        # 4. If client closes the tab/disconnects — remove them
+        # If client closes the tab/disconnects — remove them
         manager.disconnect(websocket)
+        await manager.broadcast_users_list()
