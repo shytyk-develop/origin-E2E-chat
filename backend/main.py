@@ -4,6 +4,13 @@ from backend.ws_manager import manager
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://originhub.vercel.app"],  
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     # New client connects
