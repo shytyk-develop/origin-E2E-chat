@@ -2,7 +2,7 @@
 
 /* Connection function (accepts callbacks for event handling) */
 export function connectToServer(onOpen, onMessage, onClose) {
-    const ws = new WebSocket("ws://localhost:8000/ws");
+    const ws = new WebSocket("wss://originhub.onrender.com/ws");
     
     ws.onopen = onOpen;
     ws.onmessage = onMessage;
