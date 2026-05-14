@@ -55,7 +55,33 @@ async function decryptMessage(privateKey, encryptedBuffer) {
     return textMessage;
 }
 
-// Test run (Sandbox)
+/* 4. Key Export: converting CryptoKey into a standard JSON (to send it over the network) */
+async function exportPublicKey(key) {
+    const exportedKey = await window.crypto.subtle.exportKey(
+        "jwk", // JSON Web Key format
+        key
+    );
+    return exportedKey; 
+}
+
+/* 5. Key Import: converting the received JSON back into a CryptoKey (to use for encryption) */
+async function importPublicKey(jwkData) {
+    const importedKey = await window.crypto.subtle.importKey(
+        "jwk",
+        jwkData,
+        {
+            name: "RSA-OAEP",
+            hash: "SHA-256"
+        },
+        true,
+        ["encrypt"]
+    );
+    return importedKey;
+}
+
+
+/* 
+Test run (Sandbox)
 async function runCryptoTest() {
     console.log("--- CRYPTOGRAPHY TEST START ---");
     
@@ -76,4 +102,5 @@ async function runCryptoTest() {
 }
 
 // Run the test when file loads
-runCryptoTest();
+runCryptoTest(); 
+*/
