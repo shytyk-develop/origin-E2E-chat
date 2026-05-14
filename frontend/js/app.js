@@ -18,12 +18,11 @@ socket.onopen = function(e) {
 socket.onmessage = function(event) {
     console.log(`[message] Data received from server: ${event.data}`);
     
-    // Create a new HTML element for the message
     const msgElement = document.createElement("div");
+    // Keep the gray color for incoming messages (from others)
     msgElement.className = "bg-slate-700 p-2 rounded w-fit max-w-[80%] break-words";
     msgElement.textContent = event.data;
     
-    // Add it to the chat window and scroll to the bottom
     messagesDiv.appendChild(msgElement);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 };
@@ -37,12 +36,21 @@ socket.onclose = function(event) {
 // Function to send a message (triggered by the "Send" button)
 function sendMessage() {
     const text = messageInput.value;
-    if (text.trim() === "") return; // Don't send empty strings
+    if (text.trim() === "") return;
 
-    // Send the text to the server
+    // 1. Send text to the server
     socket.send(text);
     
-    // Clear the input field
+    // 2. RENDER OUR OWN MESSAGE ON THE SCREEN
+    const msgElement = document.createElement("div");
+    // Use a different color and right alignment for our own messages
+    msgElement.className = "bg-blue-600 p-2 rounded w-fit max-w-[80%] break-words self-end ml-auto text-right";
+    msgElement.textContent = text;
+    
+    messagesDiv.appendChild(msgElement);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    // 3. Clear the input field
     messageInput.value = "";
 }
 
