@@ -3,6 +3,9 @@ from fastapi import WebSocket
 import json
 from typing import Dict, Any
 
+# Import database module
+import database 
+
 class ConnectionManager:
     def __init__(self):
         # Dictionary instead of a simple list:
@@ -17,23 +20,33 @@ class ConnectionManager:
         if websocket in self.active_connections:
             del self.active_connections[websocket]
 
-    async def broadcast_users_list(self):
-        # 1. Collect a list of everyone who has already provided a username
-        users = []
-        for ws, data in self.active_connections.items():
-            if data["username"] and data["public_key"]:
-                users.append({
-                    "username": data["username"],
-                    "public_key": data["public_key"]
-                })
+    async def register_user(self, websocket: WebSocket, username: str, public_key: str):
+        """Registers a user upon joining the chat"""
+        self.active_connections[websocket]["username"] = username
+        self.active_connections[websocket]["public_key"] = public_key
         
-        # 2. Formulate the message
+        database.save_user(username, public_key)
+        
+        offline_msgs = database.get_and_delete_offline_messages(username)
+        for msg in offline_msgs:
+            packet = {
+                "type": "message",
+                "from": msg["sender"],
+                "content": msg["content"]
+            }
+            await websocket.send_text(json.dumps(packet))
+
+    async def broadcast_users_list(self):
+        # Fetch the contact list from the Database instead of RAM
+        users_from_db = database.get_all_users()
+        
+        # Formulate the message
         message = {
             "type": "users_list",
-            "users": users
+            "users": users_from_db
         }
         
-        # 3. Broadcast this list to all connected clients
+        # Broadcast this list to all connected clients
         message_json = json.dumps(message)
         for ws in self.active_connections.keys():
             await ws.send_text(message_json)
@@ -41,17 +54,25 @@ class ConnectionManager:
     async def send_personal_message(self, message_data: dict, sender_ws: WebSocket):
         target_username = message_data.get("to")
         sender_username = self.active_connections[sender_ws]["username"]
+        content = message_data["content"]
         
         # Search for the recipient by their username
+        target_ws = None
         for ws, data in self.active_connections.items():
             if data["username"] == target_username:
-                # Formulate the payload and send it only to them
-                packet = {
-                    "type": "message",
-                    "from": sender_username,
-                    "content": message_data["content"] # Encrypted array
-                }
-                await ws.send_text(json.dumps(packet))
+                target_ws = ws
                 break
+                
+        if target_ws:
+            # Recipient is online — deliver instantly via WebSocket
+            packet = {
+                "type": "message",
+                "from": sender_username,
+                "content": content
+            }
+            await target_ws.send_text(json.dumps(packet))
+        else:
+            # Recipient is offline — store encrypted data in PostgreSQL queue
+            database.save_offline_message(sender_username, target_username, content)
 
 manager = ConnectionManager()

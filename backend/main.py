@@ -22,14 +22,13 @@ async def websocket_endpoint(websocket: WebSocket):
             data = json.loads(data_str)
             
             if data["type"] == "join":
-                manager.active_connections[websocket]["username"] = data["username"]
-                manager.active_connections[websocket]["public_key"] = data["public_key"]
+                # Delegate registration to the new manager method
+                await manager.register_user(websocket, data["username"], data["public_key"])
                 await manager.broadcast_users_list()
                 
             elif data["type"] == "message":
                 await manager.send_personal_message(data, websocket)
             
     except WebSocketDisconnect:
-        # If client closes the tab/disconnects — remove them
+        # If client closes the tab/disconnects —> remove them
         manager.disconnect(websocket)
-        await manager.broadcast_users_list()
