@@ -3,6 +3,7 @@
 import { DOM, hideLoginShowChat, updateStatus, renderUsersList, activateChatPanel, appendMessage } from './ui.js';
 import { connectToServer, sendPacket } from './network.js';
 import { generateKeyPair, exportPublicKey, importPublicKey, encryptMessage, decryptMessage } from './crypto.js';
+import { saveHistory, loadHistory } from './storage.js';
 
 let socket = null;
 let state = {
@@ -19,6 +20,9 @@ async function joinChat() {
     
     state.myUsername = inputName;
     hideLoginShowChat();
+
+    // Load history from local storage
+    state.chatHistory = loadHistory(state.myUsername);
 
     // 1. Cryptography
     state.myKeys = await generateKeyPair();
@@ -71,6 +75,9 @@ function processMessage(chatPartner, sender, text, type) {
     if (state.currentTargetUser === chatPartner) {
         appendMessage(sender, text, type);
     }
+
+    // 4. Save changes to local storage
+    saveHistory(state.myUsername, state.chatHistory);
 }
 
 // Switches the active chat window to the selected user
