@@ -4,6 +4,7 @@ import { DOM, updateStatus, renderUsersList, activateChatPanel, appendMessage } 
 import { connectToServer, sendPacket } from './network.js';
 import { generateKeyPair, exportPublicKey, exportPrivateKey, importPublicKey, importPrivateKey, encryptMessage, decryptMessage } from './crypto.js';
 import { saveHistory, loadHistory, saveKeys, loadKeys } from './storage.js';
+import { initRouter, navigateTo } from './router.js';
 
 const API_URL = "https://originhub.onrender.com"; 
 
