@@ -3,6 +3,7 @@
 import psycopg2
 import json
 import os
+import bcrypt
 from dotenv import load_dotenv
 
 # Load variables from .env (for local development)
@@ -28,6 +29,11 @@ def init_db():
         )
     ''')
     
+    cursor.execute('''
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT '';
+    ''')
+    
     # Offline messages table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS offline_messages (
@@ -41,10 +47,21 @@ def init_db():
     conn.commit()
     conn.close()
 
+# --- PASSWORD CRYPTOGRAPHY HELPERS ---
+
+def hash_password(password: str) -> str:
+    """Hashes a plain-text password using bcrypt"""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifies a plain-text password against a hashed match"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
 # --- USER FUNCTIONS ---
 
-def save_user(username: str, public_key):
-    """Saves or updates a user's key (Upsert)"""
+def register_user_db(username: str, password: str, public_key) -> bool:
+    """Registers a new user with a hashed password and public key"""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -54,16 +71,40 @@ def save_user(username: str, public_key):
     else:
         public_key_str = public_key
     
-    query = '''
-        INSERT INTO users (username, public_key) 
-        VALUES (%s, %s)
-        ON CONFLICT (username) 
-        DO UPDATE SET public_key = EXCLUDED.public_key;
-    '''
-    # Pass the serialized string
-    cursor.execute(query, (username, public_key_str))
-    conn.commit()
+    hashed_pw = hash_password(password)
+    
+    try:
+        cursor.execute(
+            'INSERT INTO users (username, password_hash, public_key) VALUES (%s, %s, %s)', 
+            (username, hashed_pw, public_key_str)
+        )
+        conn.commit()
+        return True
+    except psycopg2.IntegrityError:
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def login_user_db(username: str, password: str):
+    """Authenticates a user and returns their verified public key"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT password_hash, public_key FROM users WHERE username = %s', (username,))
+    row = cursor.fetchone()
     conn.close()
+    
+    if row is None:
+        return None
+        
+    db_hash, db_pub_key_str = row[0], row[1]
+    
+    if verify_password(password, db_hash):
+        try:
+            return json.loads(db_pub_key_str)
+        except (json.JSONDecodeError, TypeError):
+            return db_pub_key_str
+    return None
 
 def get_all_users() -> list:
     """Return a list of all registered users"""
