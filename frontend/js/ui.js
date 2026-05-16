@@ -1,21 +1,26 @@
 // frontend/js/ui.js
 
 export const DOM = {
-    loginModal: document.getElementById('loginModal'),
-    mainApp: document.getElementById('mainApp'),
+    // === Page Containers (for the router) ===
+    pageLogin: document.getElementById('page-login'),
+    pageChat: document.getElementById('page-chat'),
+
+    // === Login Page Elements ===
+    usernameInput: document.getElementById('usernameInput'),
+    passwordInput: document.getElementById('passwordInput'), // Password field
+    btnLogin: document.getElementById('btnLogin'),           // Login button
+    btnRegister: document.getElementById('btnRegister'),     // Register button
+    authError: document.getElementById('authError'),         // Error text (invalid password, etc.)
+
+    // === Chat Page Elements ===
     statusSpan: document.getElementById('status'),
     messagesDiv: document.getElementById('messages'),
     messageInput: document.getElementById('messageInput'),
     sendBtn: document.getElementById('sendBtn'),
     usersListDiv: document.getElementById('usersList'),
     chatWithTitle: document.getElementById('chatWithTitle'),
-    usernameInput: document.getElementById('usernameInput')
+    chatWelcome: document.getElementById('chat-welcome')     // "Select a chat" placeholder screen
 };
-
-export function hideLoginShowChat() {
-    DOM.loginModal.classList.add('hidden');
-    DOM.mainApp.classList.remove('hidden');
-}
 
 export function updateStatus(status, colorClass) {
     DOM.statusSpan.textContent = status;
