@@ -4,4 +4,4 @@ websockets
 psycopg2-binary
 python-dotenv
 bcrypt
-jwt
+PyJWT
