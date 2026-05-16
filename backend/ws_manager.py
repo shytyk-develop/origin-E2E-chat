@@ -25,7 +25,7 @@ class ConnectionManager:
         self.active_connections[websocket]["username"] = username
         self.active_connections[websocket]["public_key"] = public_key
         
-        database.save_user(username, public_key)
+        database.register_user_db(username, "", public_key)
         
         offline_msgs = database.get_and_delete_offline_messages(username)
         for msg in offline_msgs:
