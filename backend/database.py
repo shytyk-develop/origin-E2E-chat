@@ -43,10 +43,16 @@ def init_db():
 
 # --- USER FUNCTIONS ---
 
-def save_user(username: str, public_key: str):
+def save_user(username: str, public_key):
     """Saves or updates a user's key (Upsert)"""
     conn = get_connection()
     cursor = conn.cursor()
+    
+    # CONVERT THE DICTIONARY INTO A STRING
+    if isinstance(public_key, dict):
+        public_key_str = json.dumps(public_key)
+    else:
+        public_key_str = public_key
     
     query = '''
         INSERT INTO users (username, public_key) 
@@ -54,19 +60,33 @@ def save_user(username: str, public_key: str):
         ON CONFLICT (username) 
         DO UPDATE SET public_key = EXCLUDED.public_key;
     '''
-    cursor.execute(query, (username, public_key))
+    # Pass the serialized string
+    cursor.execute(query, (username, public_key_str))
     conn.commit()
     conn.close()
 
 def get_all_users() -> list:
-    """Returns a list of all registered users"""
+    """Return a list of all registered users"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT username, public_key FROM users')
     rows = cursor.fetchall()
     conn.close()
     
-    return [{"username": row[0], "public_key": row[1]} for row in rows]
+    users = []
+    for row in rows:
+        username = row[0]
+        public_key_str = row[1]
+        
+        # CONVERT THE DB STRING BACK INTO A DICTIONARY
+        try:
+            public_key_obj = json.loads(public_key_str)
+        except (json.JSONDecodeError, TypeError):
+            public_key_obj = public_key_str 
+            
+        users.append({"username": username, "public_key": public_key_obj})
+        
+    return users
 
 # --- MESSAGE FUNCTIONS ---
 
