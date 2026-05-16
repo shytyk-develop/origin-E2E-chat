@@ -1,6 +1,6 @@
 // frontend/js/app.js
 
-import { DOM, hideLoginShowChat, updateStatus, renderUsersList, activateChatPanel, appendMessage } from './ui.js';
+import { DOM, updateStatus, renderUsersList, activateChatPanel, appendMessage } from './ui.js';
 import { connectToServer, sendPacket } from './network.js';
 import { generateKeyPair, exportPublicKey, exportPrivateKey, importPublicKey, importPrivateKey, encryptMessage, decryptMessage } from './crypto.js';
 import { saveHistory, loadHistory, saveKeys, loadKeys } from './storage.js';
