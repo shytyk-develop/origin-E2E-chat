@@ -2,8 +2,8 @@
 
 import { DOM, hideLoginShowChat, updateStatus, renderUsersList, activateChatPanel, appendMessage } from './ui.js';
 import { connectToServer, sendPacket } from './network.js';
-import { generateKeyPair, exportPublicKey, importPublicKey, encryptMessage, decryptMessage } from './crypto.js';
-import { saveHistory, loadHistory } from './storage.js';
+import { generateKeyPair, exportPublicKey, exportPrivateKey, importPublicKey, importPrivateKey, encryptMessage, decryptMessage } from './crypto.js';
+import { saveHistory, loadHistory, saveKeys, loadKeys } from './storage.js';
 
 let socket = null;
 let state = {
@@ -25,8 +25,29 @@ async function joinChat() {
     state.chatHistory = loadHistory(state.myUsername);
 
     // 1. Cryptography
-    state.myKeys = await generateKeyPair();
-    const exportedPublicKey = await exportPublicKey(state.myKeys.publicKey);
+    let exportedPublicKey; // Variable from the old version to keep the network block below unchanged
+    
+    const savedKeysJWK = loadKeys(state.myUsername);
+
+    if (savedKeysJWK) {
+        console.log("🔑 Found existing keys in local storage. Importing...");
+        
+        state.myKeys = {
+            publicKey: await importPublicKey(savedKeysJWK.publicKey),
+            privateKey: await importPrivateKey(savedKeysJWK.privateKey)
+        };
+        exportedPublicKey = savedKeysJWK.publicKey; 
+    } else {
+        console.log("✨ New user! Generating a new key pair...");
+        
+        state.myKeys = await generateKeyPair();
+        
+        const pubJWK = await exportPublicKey(state.myKeys.publicKey);
+        const privJWK = await exportPrivateKey(state.myKeys.privateKey);
+        
+        saveKeys(state.myUsername, { publicKey: pubJWK, privateKey: privJWK });
+        exportedPublicKey = pubJWK;
+    }
 
     // 2. Network
     socket = connectToServer(

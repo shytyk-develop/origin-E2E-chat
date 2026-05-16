@@ -104,3 +104,28 @@ async function runCryptoTest() {
 // Run the test when file loads
 runCryptoTest(); 
 */
+
+
+/* 6. Export PRIVATE key into a JWK JSON */
+export async function exportPrivateKey(key) {
+    const exportedKey = await window.crypto.subtle.exportKey(
+        "jwk",
+        key
+    );
+    return exportedKey;
+}
+
+/* 7. Import PRIVATE key from a JWK JSON back into a CryptoKey */
+export async function importPrivateKey(jwkData) {
+    return await window.crypto.subtle.importKey(
+        "jwk",
+        jwkData,
+        {
+            name: "RSA-OAEP",
+            hash: "SHA-256"
+        },
+        true, // Allow usage for decryption
+        ["decrypt"]
+    );
+}
+

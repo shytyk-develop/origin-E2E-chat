@@ -14,3 +14,14 @@ export function loadHistory(username) {
     }
     return {}; // If no history yet, return an empty object
 }
+
+// Save keys (already converted to JWK) to local storage
+export function saveKeys(username, keysObj) {
+    localStorage.setItem(`e2e_keys_${username}`, JSON.stringify(keysObj));
+}
+
+// Load the keys from local storage
+export function loadKeys(username) {
+    const savedKeys = localStorage.getItem(`e2e_keys_${username}`);
+    return savedKeys ? JSON.parse(savedKeys) : null;
+}
