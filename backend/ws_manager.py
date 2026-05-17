@@ -26,31 +26,10 @@ class ConnectionManager:
         if websocket in self.active_connections:
             del self.active_connections[websocket]
 
-    async def register_user(self, websocket: WebSocket, username: str, public_key: str, token: str):
-        """Registers a user upon verifying their signature via a JWT token"""
+    async def register_user(self, websocket: WebSocket, username: str, public_key: str):
+        """Registers a user upon successful handshake authentication"""
         
-        # --- 1. TOKEN VALIDATION ---
-        try:
-            # Decode the payload and cryptographically verify the signature
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            
-            # Check if the token subject matches the claiming username
-            if payload.get("sub") != username:
-                print(f"⚠️ Security alert: {username} tried to use someone else's token!")
-                await websocket.close(code=1008, reason="Invalid token owner")
-                return False
-                
-        except jwt.ExpiredSignatureError:
-            print(f"🕒 Token expired for {username}")
-            await websocket.close(code=1008, reason="Token expired")
-            return False
-            
-        except (jwt.InvalidTokenError, ValueError):
-            print(f"❌ Invalid token presented by {username}")
-            await websocket.close(code=1008, reason="Invalid token")
-            return False
-
-        # --- 2. SUCCESSFUL AUTHENTICATION — ACCESS GRANTED ---
+        # --- ACCESS GRANTED (Token already verified in main.py) ---
         self.active_connections[websocket]["username"] = username
         self.active_connections[websocket]["public_key"] = public_key
         
