@@ -64,7 +64,7 @@ async def login(req: LoginRequest, response: Response):
         key="access_token",
         value=token,
         httponly=True,     # JS cannot read this cookie
-        samesite="lax",    
+        samesite="none",    
         secure=True,       
         max_age=86400      # 24 hours lifespan in seconds
     )
