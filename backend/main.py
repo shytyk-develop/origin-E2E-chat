@@ -32,7 +32,7 @@ db_write_queue = asyncio.Queue()
 async def batch_history_flush_worker():
     """Background task worker that gathers database writes and executes them in massive batches"""
     while True:
-        await asyncio.sleep(2.0)  # Flush queue to disk every 2 seconds
+        await asyncio.sleep(4.0)  # Flush queue to disk every 2 seconds
         batch = []
         while not db_write_queue.empty():
             item = await db_write_queue.get()
