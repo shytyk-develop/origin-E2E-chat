@@ -1,6 +1,40 @@
 // frontend/js/app.js
 
-import { DOM, updateStatus, renderUsersList, activateChatPanel, appendMessage } from './ui.js';
+import {
+    DOM,
+    updateStatus,
+    renderUsersList,
+    activateChatPanel,
+    resetChatPanel,
+    appendMessage,
+    filterUsers,
+    focusComposer,
+    focusContactSearch,
+    autoResizeComposer,
+    updateComposerMeta,
+    setDraftStatus,
+    setComposerValue,
+    getComposerValue,
+    clearComposer,
+    insertAtCursor,
+    scrollMessagesToBottom,
+    openChatMenu,
+    openComposerMenu,
+    closeAllPopovers,
+    openMessageSearch,
+    closeMessageSearch,
+    searchMessages,
+    openSettings,
+    openShortcuts,
+    closeModals,
+    closeTransientUi,
+    showToast,
+    setPreferenceControls,
+    clearUsersList,
+    updateMessageIdentity,
+    removeMessageElement,
+    setMessageActionHandlers
+} from './ui.js';
 import { connectToServer, sendPacket } from './network.js';
 import { 
     generateKeyPair, 
@@ -13,20 +47,47 @@ import {
     encryptPrivateKeyWithPassword,
     decryptPrivateKeyWithPassword
 } from './crypto.js';
-import { saveHistory, loadHistory, saveKeys, loadKeys } from './storage.js';
+import { saveHistory, loadHistory, saveKeys, loadKeys, saveDraft, loadDraft, clearDraft } from './storage.js';
 import { initRouter, navigateTo } from './router.js';
-
-const API_URL = "https://originhub.onrender.com"; 
+import { loadPreferences, applyPreferences, updatePreference } from './preferences.js';
+import { registerShortcuts } from './shortcuts.js';
+import {
+    buildChatTranscript,
+    downloadTextFile,
+    copyText,
+    createFileMarkers,
+    makeSafeFilename
+} from './chatActions.js';
+import {
+    normalizeUsername,
+    isValidUsername,
+    usernamePolicyText,
+    loginRequest,
+    registerRequest,
+    searchUsers,
+    getUser,
+    getHistory,
+    deleteMessage,
+    deleteConversation
+} from './api.js';
 
 let socket = null;
+let routerReady = false;
+let contactSearchTimer = null;
 let state = {
     myUsername: null,
     myKeys: null,
     token: null,
     currentTargetUser: null,
     usersDirectory: {},
-    chatHistory: {}
+    chatHistory: {},
+    preferences: loadPreferences()
 };
+
+applyPreferences(state.preferences);
+setPreferenceControls(state.preferences);
+resetChatPanel();
+clearUsersList();
 
 // Main routing handler
 async function handleNavigation(view, param) {
@@ -45,14 +106,10 @@ async function handleNavigation(view, param) {
 
         if (view === 'chat-user' && param) {
             const targetUser = param;
-            if (state.usersDirectory[targetUser] || Object.keys(state.usersDirectory).length === 0) {
-                switchChat(targetUser);
-            } else {
-                state.currentTargetUser = targetUser;
-            }
+            switchChat(targetUser);
         } else {
             state.currentTargetUser = null;
-            document.getElementById('chat-window')?.classList.add('hidden');
+            resetChatPanel();
             DOM.chatWelcome.classList.remove('hidden');
         }
     }
@@ -60,25 +117,23 @@ async function handleNavigation(view, param) {
 
 // 2. AUTHORIZATION AND REGISTRATION (HTTP POST)
 async function handleAuth(isLogin) {
-    const username = DOM.usernameInput.value.trim();
+    const username = normalizeUsername(DOM.usernameInput.value.trim());
     const password = DOM.passwordInput.value.trim();
+    DOM.usernameInput.value = username;
 
     if (!username || !password) {
         showAuthMessage("Please enter both username and password.", true);
         return;
     }
 
+    if (!isValidUsername(username)) {
+        showAuthMessage(usernamePolicyText(), true);
+        return;
+    }
+
     try {
         if (isLogin) {
-            const res = await fetch(`${API_URL}/api/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-
-            if (!res.ok) throw new Error("Invalid username or password");
-
-            const resData = await res.json();
+            const resData = await loginRequest(username, password);
             state.token = resData.access_token;
 
             localStorage.setItem('auth_token', state.token);
@@ -111,18 +166,12 @@ async function handleAuth(isLogin) {
 
             const encPrivString = await encryptPrivateKeyWithPassword(privJWK, password);
 
-            const res = await fetch(`${API_URL}/api/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    username, 
-                    password, 
-                    public_key: pubJWK,
-                    encrypted_private_key: encPrivString
-                })
+            await registerRequest({
+                username,
+                password,
+                publicKey: pubJWK,
+                encryptedPrivateKey: encPrivString
             });
-
-            if (!res.ok) throw new Error("Username is already taken");
 
             saveKeys(username, { publicKey: pubJWK, privateKey: privJWK });
             showAuthMessage("Registration successful! You can now log in.", false);
@@ -143,7 +192,8 @@ function showAuthMessage(text, isError) {
 function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat') {
     state.myUsername = username;
     state.chatHistory = loadHistory(state.myUsername);
-    
+
+    ensureRouter();
     navigateTo(targetPath, handleNavigation);
 
     socket = connectToServer(
@@ -159,41 +209,106 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
             const data = JSON.parse(event.data);
             
             if (data.type === "users_list") {
-                state.usersDirectory = {};
-                data.users.forEach(u => state.usersDirectory[u.username] = u.public_key);
-                
-                renderUsersList(data.users, state.myUsername, (selectedUser) => {
-                    navigateTo(`/chat/@${selectedUser}`, handleNavigation);
+                data.users.forEach(u => {
+                    state.usersDirectory[u.username] = u.public_key;
                 });
-
-                if (state.currentTargetUser) {
-                    switchChat(state.currentTargetUser);
-                }
             } 
             else if (data.type === "message") {
                 const encryptedBytes = new Uint8Array(data.content);
                 const decryptedText = await decryptMessage(state.myKeys.privateKey, encryptedBytes);
-                processMessage(data.from, data.from, decryptedText, "incoming");
+                processMessage(data.from, {
+                    id: data.id,
+                    clientMessageId: data.client_message_id,
+                    sender: data.from,
+                    text: decryptedText,
+                    type: "incoming",
+                    timestamp: data.timestamp || Date.now()
+                });
+            }
+            else if (data.type === "message_ack") {
+                markMessageSynced(data.client_message_id, data.id, data.timestamp);
             }
         },
         () => updateStatus("Disconnected", "text-red-500")
     );
 }
 
-function processMessage(chatPartner, sender, text, type) {
+function ensureRouter() {
+    if (routerReady) return;
+    initRouter(handleNavigation);
+    routerReady = true;
+}
+
+function processMessage(chatPartner, messageInput) {
     if (!state.chatHistory[chatPartner]) {
         state.chatHistory[chatPartner] = [];
     }
-    state.chatHistory[chatPartner].push({ sender, text, type });
+
+    const message = {
+        id: messageInput.id || null,
+        clientMessageId: messageInput.clientMessageId || null,
+        sender: messageInput.sender,
+        text: messageInput.text,
+        type: messageInput.type,
+        timestamp: messageInput.timestamp || Date.now(),
+        pending: Boolean(messageInput.pending)
+    };
+
+    state.chatHistory[chatPartner].push(message);
 
     if (state.currentTargetUser === chatPartner) {
-        appendMessage(sender, text, type);
+        appendMessage(message);
     }
     saveHistory(state.myUsername, state.chatHistory);
 }
 
+function markMessageSynced(clientMessageId, messageId, timestamp) {
+    if (!clientMessageId) return;
+
+    let message = null;
+    for (const messages of Object.values(state.chatHistory)) {
+        message = messages.find(item => item.clientMessageId === clientMessageId);
+        if (message) break;
+    }
+    if (!message) return;
+
+    message.id = messageId;
+    message.timestamp = timestamp || message.timestamp;
+    message.pending = false;
+    saveHistory(state.myUsername, state.chatHistory);
+    updateMessageIdentity(clientMessageId, messageId, timestamp);
+}
+
+async function ensureUserKey(username) {
+    if (state.usersDirectory[username]) return true;
+
+    try {
+        const user = await getUser(state.token, username);
+        state.usersDirectory[user.username] = user.public_key;
+        return true;
+    } catch (err) {
+        console.error("User lookup failed:", err);
+        showToast("User was not found.", "error");
+        return false;
+    }
+}
+
 // Switches active chat with cloud-history parsing layer integration
 async function switchChat(username) {
+    username = normalizeUsername(username);
+    if (!isValidUsername(username)) {
+        showToast(usernamePolicyText(), "error");
+        navigateTo('/chat', handleNavigation);
+        return;
+    }
+
+    const userReady = await ensureUserKey(username);
+    if (!userReady) {
+        navigateTo('/chat', handleNavigation);
+        return;
+    }
+
+    persistCurrentDraft();
     state.currentTargetUser = username;
     activateChatPanel(username); 
     DOM.chatWelcome.classList.add('hidden'); 
@@ -202,29 +317,27 @@ async function switchChat(username) {
     // --- SECURE LAZY CLOUD SYNCHRONIZATION ---
     // Fetch latest 50 messages slice. Server doesn't know plain text content!
     try {
-        const res = await fetch(`${API_URL}/api/history?user=${state.myUsername}&partner=${username}&limit=50&offset=0`);
-        if (res.ok) {
-            const cloudHistory = await res.json();
-            state.chatHistory[username] = []; // Clear current RAM session slice to avoid duplicate merges
-            
-            for (const msg of cloudHistory) {
-                const isMe = (msg.sender === state.myUsername);
-                
-                // CRITICAL DECISION POINT: If I sent it, decrypt 'content_sender'. 
-                // If the partner sent it, decrypt 'content_recipient'.
-                const rawBytes = isMe ? msg.content_sender : msg.content_recipient;
-                const encryptedBytes = new Uint8Array(rawBytes);
-                
-                try {
-                    const decryptedText = await decryptMessage(state.myKeys.privateKey, encryptedBytes);
-                    state.chatHistory[username].push({
-                        sender: isMe ? "You" : msg.sender,
-                        text: decryptedText,
-                        type: isMe ? "outgoing" : "incoming"
-                    });
-                } catch (cryptoErr) {
-                    console.error("🔒 Crypto payload corruption block dropped:", cryptoErr);
-                }
+        const cloudHistory = await getHistory(state.token, state.myUsername, username, 50, 0);
+        state.chatHistory[username] = [];
+
+        for (const msg of cloudHistory) {
+            const isMe = (msg.sender === state.myUsername);
+            const rawBytes = isMe ? msg.content_sender : msg.content_recipient;
+            const encryptedBytes = new Uint8Array(rawBytes);
+
+            try {
+                const decryptedText = await decryptMessage(state.myKeys.privateKey, encryptedBytes);
+                state.chatHistory[username].push({
+                    id: msg.id,
+                    clientMessageId: msg.client_message_id,
+                    sender: isMe ? "You" : msg.sender,
+                    text: decryptedText,
+                    type: isMe ? "outgoing" : "incoming",
+                    timestamp: msg.timestamp || Date.now(),
+                    pending: false
+                });
+            } catch (cryptoErr) {
+                console.error("🔒 Crypto payload corruption block dropped:", cryptoErr);
             }
         }
     } catch (err) {
@@ -233,42 +346,401 @@ async function switchChat(username) {
 
     if (state.chatHistory[username]) {
         state.chatHistory[username].forEach(msg => {
-            appendMessage(msg.sender, msg.text, msg.type);
+            appendMessage(msg);
         });
     }
+    setComposerValue(loadDraft(state.myUsername, username));
+    setDraftStatus(getComposerValue() ? "Draft restored locally" : "Cipher Stack: AES-GCM-256 + RSA-OAEP-2048");
     saveHistory(state.myUsername, state.chatHistory);
 }
 
-// Make function globally available for the HTML button
-window.handleSendMessage = async function() {
-    const text = DOM.messageInput.value.trim();
-    if (!text || !state.currentTargetUser) return;
+async function handleSendMessage() {
+    const text = getComposerValue().trim();
 
-    // 1. ENCRYPT FOR THE RECIPIENT
+    if (!state.currentTargetUser) {
+        showToast("Select a chat first.", "error");
+        return;
+    }
+
+    if (!text) {
+        focusComposer();
+        return;
+    }
+
+    if (text.length > 2000) {
+        showToast("Message is over the 2000 character limit.", "error");
+        focusComposer();
+        return;
+    }
+
     const targetPublicKeyJWK = state.usersDirectory[state.currentTargetUser];
-    const targetCryptoKey = await importPublicKey(targetPublicKeyJWK);
-    const encryptedBufferRecipient = await encryptMessage(targetCryptoKey, text);
-    const encryptedArrayRecipient = Array.from(new Uint8Array(encryptedBufferRecipient));
+    if (!targetPublicKeyJWK) {
+        showToast("Recipient key is not available yet. Refresh contacts.", "error");
+        focusComposer();
+        return;
+    }
 
-    // 2. ENCRYPT FOR OURSELVES (Multi-device dynamic cloud recovery strategy)
-    const encryptedBufferSelf = await encryptMessage(state.myKeys.publicKey, text);
-    const encryptedArraySender = Array.from(new Uint8Array(encryptedBufferSelf));
+    try {
+        const targetCryptoKey = await importPublicKey(targetPublicKeyJWK);
+        const encryptedBufferRecipient = await encryptMessage(targetCryptoKey, text);
+        const encryptedArrayRecipient = Array.from(new Uint8Array(encryptedBufferRecipient));
 
-    // 3. SEND THE DUAL PAYLOAD BUNDLE
-    sendPacket(socket, "message", {
-        to: state.currentTargetUser,
-        content_recipient: encryptedArrayRecipient,
-        content_sender: encryptedArraySender
-    });
+        const encryptedBufferSelf = await encryptMessage(state.myKeys.publicKey, text);
+        const encryptedArraySender = Array.from(new Uint8Array(encryptedBufferSelf));
+        const clientMessageId = crypto.randomUUID();
 
-    processMessage(state.currentTargetUser, "You", text, "outgoing");
-    DOM.messageInput.value = "";
+        const sent = sendPacket(socket, "message", {
+            to: state.currentTargetUser,
+            content_recipient: encryptedArrayRecipient,
+            content_sender: encryptedArraySender,
+            client_message_id: clientMessageId
+        });
+
+        if (!sent) {
+            throw new Error("WebSocket is not connected");
+        }
+
+        processMessage(state.currentTargetUser, {
+            clientMessageId,
+            sender: "You",
+            text,
+            type: "outgoing",
+            timestamp: Date.now(),
+            pending: true
+        });
+        clearDraft(state.myUsername, state.currentTargetUser);
+        clearComposer();
+        setDraftStatus("Message queued. Waiting for database sync.");
+    } catch (err) {
+        console.error("Message send failed:", err);
+        showToast("Message send failed. Check connection and keys.", "error");
+    } finally {
+        focusComposer();
+    }
 }
+
+window.handleSendMessage = handleSendMessage;
 
 // Event Listeners
 DOM.btnLogin.addEventListener('click', () => handleAuth(true));
 DOM.btnRegister.addEventListener('click', () => handleAuth(false));
-DOM.sendBtn.addEventListener('click', window.handleSendMessage); 
+DOM.usernameInput.addEventListener('input', () => {
+    DOM.usernameInput.value = normalizeUsername(DOM.usernameInput.value);
+});
+DOM.usernameInput.addEventListener('keydown', handleAuthKeyboard);
+DOM.passwordInput.addEventListener('keydown', handleAuthKeyboard);
+DOM.sendBtn.addEventListener('click', handleSendMessage);
+
+DOM.messageInput.addEventListener('input', () => {
+    autoResizeComposer();
+    updateComposerMeta(getComposerValue());
+    persistCurrentDraft();
+});
+
+DOM.messageInput.addEventListener('keydown', (event) => {
+    const primary = event.metaKey || event.ctrlKey;
+    if (event.key === 'Enter' && !event.shiftKey && (state.preferences.enterToSend || primary)) {
+        event.preventDefault();
+        handleSendMessage();
+    }
+});
+
+DOM.contactSearchInput.addEventListener('input', () => {
+    handleContactSearchInput();
+});
+
+DOM.clearContactSearchBtn.addEventListener('click', () => {
+    DOM.contactSearchInput.value = '';
+    filterUsers('');
+    clearUsersList();
+    focusContactSearch();
+});
+
+DOM.refreshUsersBtn.addEventListener('click', refreshUsersDirectory);
+DOM.focusContactsBtn.addEventListener('click', focusContactSearch);
+DOM.focusComposerBtn.addEventListener('click', focusComposer);
+DOM.settingsBtn.addEventListener('click', openSettings);
+DOM.shortcutsBtn.addEventListener('click', openShortcuts);
+DOM.closeSettingsBtn.addEventListener('click', closeModals);
+DOM.closeShortcutsBtn.addEventListener('click', closeModals);
+DOM.backdrop.addEventListener('click', closeModals);
+
+DOM.copyUsernameBtn.addEventListener('click', copyCurrentUsername);
+DOM.logoutBtn.addEventListener('click', handleLogout);
+
+DOM.chatMenuBtn.addEventListener('click', openChatMenu);
+DOM.composerMenuBtn.addEventListener('click', openComposerMenu);
+DOM.chatSearchBtn.addEventListener('click', openMessageSearch);
+DOM.closeMessageSearchBtn.addEventListener('click', closeMessageSearch);
+DOM.messageSearchInput.addEventListener('input', () => searchMessages(DOM.messageSearchInput.value));
+DOM.scrollBottomBtn.addEventListener('click', scrollMessagesToBottom);
+
+DOM.copyChatLinkBtn.addEventListener('click', copyCurrentChatLink);
+DOM.exportChatBtn.addEventListener('click', exportCurrentChat);
+DOM.clearChatBtn.addEventListener('click', clearCurrentChat);
+
+DOM.attachBtn.addEventListener('click', () => DOM.fileInput.click());
+DOM.fileInput.addEventListener('change', () => {
+    if (!DOM.fileInput.files.length) return;
+    insertAtCursor(createFileMarkers(DOM.fileInput.files));
+    persistCurrentDraft();
+    DOM.fileInput.value = '';
+});
+
+DOM.insertTimestampBtn.addEventListener('click', () => {
+    insertAtCursor(new Date().toLocaleString());
+    persistCurrentDraft();
+    closeAllPopovers();
+});
+
+DOM.insertSecurityNoteBtn.addEventListener('click', () => {
+    insertAtCursor('Encrypted locally before transport.');
+    persistCurrentDraft();
+    closeAllPopovers();
+});
+
+DOM.clearDraftBtn.addEventListener('click', () => {
+    clearDraft(state.myUsername, state.currentTargetUser);
+    clearComposer();
+    setDraftStatus("Draft cleared.");
+    closeAllPopovers();
+});
+
+bindPreferenceToggle(DOM.prefEnterSend, 'enterToSend');
+bindPreferenceToggle(DOM.prefCompactMode, 'compactMode');
+bindPreferenceToggle(DOM.prefShowTimestamps, 'showTimestamps');
+document.addEventListener('click', (event) => {
+    const clickedPopover = event.target.closest('.popover-menu');
+    const clickedPopoverButton = event.target.closest('#uiChatMenuBtn, #uiComposerMenuBtn');
+    if (!clickedPopover && !clickedPopoverButton) {
+        closeAllPopovers();
+    }
+});
+
+setMessageActionHandlers({
+    onDeleteMessage: deleteSingleMessage
+});
+
+registerShortcuts({
+    closeTransientUi: () => {
+        closeTransientUi();
+        closeMessageSearch();
+    },
+    openShortcuts,
+    openSettings,
+    openMessageSearch,
+    focusContacts: focusContactSearch,
+    focusComposer,
+    exportChat: exportCurrentChat
+});
+
+function handleAuthKeyboard(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        handleAuth(true);
+    }
+}
+
+function bindPreferenceToggle(control, key) {
+    control.addEventListener('change', () => {
+        state.preferences = updatePreference(state.preferences, key, control.checked);
+        setPreferenceControls(state.preferences);
+        showToast("Interface setting saved.", "success");
+    });
+}
+
+function handleContactSearchInput() {
+    const query = normalizeUsername(DOM.contactSearchInput.value);
+    DOM.contactSearchInput.value = query;
+    filterUsers(query);
+
+    window.clearTimeout(contactSearchTimer);
+
+    if (query.length < 2) {
+        clearUsersList();
+        return;
+    }
+
+    clearUsersList("Searching...");
+    contactSearchTimer = window.setTimeout(() => {
+        performUserSearch(query);
+    }, 220);
+}
+
+async function performUserSearch(query) {
+    try {
+        const users = await searchUsers(state.token, query, 20);
+        users.forEach(user => {
+            state.usersDirectory[user.username] = user.public_key;
+        });
+        renderUsersList(users, state.myUsername, (selectedUser) => {
+            navigateTo(`/chat/@${selectedUser}`, handleNavigation);
+        }, state.currentTargetUser);
+    } catch (err) {
+        console.error("User search failed:", err);
+        clearUsersList("Search failed");
+        showToast(err.message || "User search failed.", "error");
+    }
+}
+
+function persistCurrentDraft() {
+    if (!state.myUsername || !state.currentTargetUser) return;
+
+    const text = getComposerValue();
+    if (text.trim()) {
+        saveDraft(state.myUsername, state.currentTargetUser, text);
+        setDraftStatus("Draft saved locally.");
+    } else {
+        clearDraft(state.myUsername, state.currentTargetUser);
+        setDraftStatus("Cipher Stack: AES-GCM-256 + RSA-OAEP-2048");
+    }
+}
+
+function refreshUsersDirectory() {
+    const query = normalizeUsername(DOM.contactSearchInput.value);
+    if (query.length < 2) {
+        focusContactSearch();
+        showToast("Type at least 2 characters to search.", "error");
+        return;
+    }
+
+    performUserSearch(query);
+}
+
+async function copyCurrentUsername() {
+    if (!state.myUsername) {
+        showToast("No active identity.", "error");
+        return;
+    }
+
+    try {
+        await copyText(state.myUsername);
+        showToast("Identity copied.", "success");
+    } catch (err) {
+        console.error("Copy identity failed:", err);
+        showToast("Copy failed.", "error");
+    }
+}
+
+async function copyCurrentChatLink() {
+    if (!state.currentTargetUser) {
+        showToast("Select a chat first.", "error");
+        return;
+    }
+
+    try {
+        await copyText(`${window.location.origin}/chat/@${state.currentTargetUser}`);
+        closeAllPopovers();
+        showToast("Chat link copied.", "success");
+    } catch (err) {
+        console.error("Copy chat link failed:", err);
+        showToast("Copy failed.", "error");
+    }
+}
+
+function exportCurrentChat() {
+    if (!state.currentTargetUser) {
+        showToast("Select a chat first.", "error");
+        return;
+    }
+
+    const messages = state.chatHistory[state.currentTargetUser] || [];
+    const transcript = buildChatTranscript({
+        owner: state.myUsername,
+        partner: state.currentTargetUser,
+        messages
+    });
+    const filename = `originhub-${makeSafeFilename(state.currentTargetUser)}-${new Date().toISOString().slice(0, 10)}.txt`;
+
+    downloadTextFile(filename, transcript);
+    closeAllPopovers();
+    showToast("Local chat exported.", "success");
+}
+
+async function clearCurrentChat() {
+    if (!state.currentTargetUser) {
+        showToast("Select a chat first.", "error");
+        return;
+    }
+
+    const partner = state.currentTargetUser;
+    const confirmed = window.confirm(`Delete the entire chat history with ${partner} from the database? This cannot be undone.`);
+    if (!confirmed) {
+        closeAllPopovers();
+        focusComposer();
+        return;
+    }
+
+    try {
+        await deleteConversation(state.token, partner);
+        state.chatHistory[partner] = [];
+        DOM.messagesDiv.innerHTML = "";
+        clearDraft(state.myUsername, partner);
+        saveHistory(state.myUsername, state.chatHistory);
+        closeAllPopovers();
+        showToast("Chat history deleted from database.", "success");
+    } catch (err) {
+        console.error("Conversation delete failed:", err);
+        showToast(err.message || "Could not delete chat history.", "error");
+    } finally {
+        focusComposer();
+    }
+}
+
+async function deleteSingleMessage(messageId) {
+    if (!state.currentTargetUser || !messageId) return;
+
+    const confirmed = window.confirm("Delete this message from the database?");
+    if (!confirmed) {
+        focusComposer();
+        return;
+    }
+
+    try {
+        await deleteMessage(state.token, messageId);
+        const messages = state.chatHistory[state.currentTargetUser] || [];
+        state.chatHistory[state.currentTargetUser] = messages.filter(message => String(message.id) !== String(messageId));
+        saveHistory(state.myUsername, state.chatHistory);
+        removeMessageElement(messageId);
+        showToast("Message deleted from database.", "success");
+    } catch (err) {
+        console.error("Message delete failed:", err);
+        showToast(err.message || "Could not delete message.", "error");
+    } finally {
+        focusComposer();
+    }
+}
+
+function handleLogout() {
+    persistCurrentDraft();
+
+    if (socket) {
+        socket.close();
+        socket = null;
+    }
+    window.clearTimeout(contactSearchTimer);
+
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_username');
+
+    state.myUsername = null;
+    state.myKeys = null;
+    state.token = null;
+    state.currentTargetUser = null;
+    state.usersDirectory = {};
+    state.chatHistory = {};
+
+    DOM.usernameInput.value = "";
+    DOM.passwordInput.value = "";
+    DOM.contactSearchInput.value = "";
+    filterUsers("");
+    renderUsersList([], "", () => {});
+    clearUsersList();
+    resetChatPanel();
+    updateStatus("Disconnected", "text-red-500");
+    navigateTo('/login', handleNavigation);
+    showToast("Logged out.", "success");
+}
 
 // Asynchronous application rehydration task to process auto-logins on page reloads
 async function initializeApp() {
@@ -301,7 +773,7 @@ async function initializeApp() {
     }
 
     // Default flow: Boot the client-side router normally if no session exists
-    initRouter(handleNavigation);
+    ensureRouter();
     if (initialPath === '/' || initialPath === '/chat') {
         navigateTo('/login', handleNavigation);
     }

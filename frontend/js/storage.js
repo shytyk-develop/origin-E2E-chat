@@ -25,3 +25,18 @@ export function loadKeys(username) {
     const savedKeys = localStorage.getItem(`e2e_keys_${username}`);
     return savedKeys ? JSON.parse(savedKeys) : null;
 }
+
+export function saveDraft(username, partner, text) {
+    if (!username || !partner) return;
+    localStorage.setItem(`e2e_draft_${username}_${partner}`, text);
+}
+
+export function loadDraft(username, partner) {
+    if (!username || !partner) return '';
+    return localStorage.getItem(`e2e_draft_${username}_${partner}`) || '';
+}
+
+export function clearDraft(username, partner) {
+    if (!username || !partner) return;
+    localStorage.removeItem(`e2e_draft_${username}_${partner}`);
+}

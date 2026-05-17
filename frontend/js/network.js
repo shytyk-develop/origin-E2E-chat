@@ -28,5 +28,7 @@ export function sendPacket(socket, type, payload) {
     if (socket && socket.readyState === WebSocket.OPEN) {
         const packet = { type: type, ...payload };
         socket.send(JSON.stringify(packet));
+        return true;
     }
+    return false;
 }

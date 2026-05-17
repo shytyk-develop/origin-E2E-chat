@@ -7,6 +7,7 @@ import json
 import os
 import bcrypt
 from dotenv import load_dotenv
+from typing import Optional
 
 # Load variables from .env (for local development)
 load_dotenv()
@@ -47,6 +48,11 @@ def init_db():
             ALTER TABLE users 
             ADD COLUMN IF NOT EXISTS encrypted_private_key TEXT NOT NULL DEFAULT '';
         ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_users_username_lower
+            ON users (LOWER(username));
+        ''')
         
         # Offline messages table (signals/notifications backup)
         cursor.execute('''
@@ -54,8 +60,26 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 sender VARCHAR(255) NOT NULL,
                 receiver VARCHAR(255) NOT NULL,
-                content TEXT NOT NULL
+                content TEXT NOT NULL,
+                chat_history_id INTEGER,
+                client_message_id VARCHAR(80),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        ''')
+
+        cursor.execute('''
+            ALTER TABLE offline_messages
+            ADD COLUMN IF NOT EXISTS chat_history_id INTEGER;
+        ''')
+
+        cursor.execute('''
+            ALTER TABLE offline_messages
+            ADD COLUMN IF NOT EXISTS client_message_id VARCHAR(80);
+        ''')
+
+        cursor.execute('''
+            ALTER TABLE offline_messages
+            ADD COLUMN IF NOT EXISTS timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
         ''')
         
         # NEW: Permanent double-encrypted chat history database table
@@ -66,14 +90,31 @@ def init_db():
                 receiver VARCHAR(255) NOT NULL,
                 content_recipient TEXT NOT NULL,  -- Encrypted via recipient's public key
                 content_sender TEXT NOT NULL,     -- Encrypted via sender's own public key
+                client_message_id VARCHAR(80),
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        ''')
+
+        cursor.execute('''
+            ALTER TABLE chat_history
+            ADD COLUMN IF NOT EXISTS client_message_id VARCHAR(80);
         ''')
         
         # CRITICAL INDEX OPTIMIZATION: Prevents full table scans on high volumes
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_chat_history_routing 
             ON chat_history (sender, receiver);
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_chat_history_timestamp
+            ON chat_history (timestamp);
+        ''')
+
+        cursor.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_history_client_message_id
+            ON chat_history (client_message_id)
+            WHERE client_message_id IS NOT NULL;
         ''')
         
         conn.commit()
@@ -145,26 +186,53 @@ def login_user_db(username: str, password: str):
     finally:
         release_connection(conn)
 
-def get_all_users() -> list:
-    """Return a list of all registered users"""
+def search_users_db(query: str, current_username: str, limit: int = 20) -> list:
+    """Search users by username without returning the whole database."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('SELECT username, public_key FROM users')
+        safe_limit = max(1, min(limit, 50))
+        normalized_query = query.lower().strip()
+        like_query = normalized_query.replace('\\', '\\\\').replace('_', '\\_')
+        cursor.execute('''
+            SELECT username, public_key
+            FROM users
+            WHERE username <> %s
+              AND username ~ '^[a-z0-9_]+$'
+              AND username LIKE %s ESCAPE '\\'
+            ORDER BY
+                CASE
+                    WHEN username = %s THEN 0
+                    WHEN username LIKE %s ESCAPE '\\' THEN 1
+                    ELSE 2
+                END,
+                username
+            LIMIT %s
+        ''', (
+            current_username,
+            f'%{like_query}%',
+            normalized_query,
+            f'{like_query}%',
+            safe_limit
+        ))
         rows = cursor.fetchall()
-        
-        users = []
-        for row in rows:
-            username = row[0]
-            public_key_str = row[1]
-            
-            try:
-                public_key_obj = json.loads(public_key_str)
-            except (json.JSONDecodeError, TypeError):
-                public_key_obj = public_key_str 
-                
-            users.append({"username": username, "public_key": public_key_obj})
-        return users
+        return [_user_row_to_dict(row) for row in rows]
+    finally:
+        release_connection(conn)
+
+def get_user_db(username: str):
+    """Return one user public key by exact username."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT username, public_key
+            FROM users
+            WHERE username = %s
+              AND username ~ '^[a-z0-9_]+$'
+        ''', (username,))
+        row = cursor.fetchone()
+        return _user_row_to_dict(row) if row else None
     finally:
         release_connection(conn)
 
@@ -179,12 +247,18 @@ def save_chat_history_batch(messages_batch: list):
     try:
         # Transforming objects into a structured data tuple for psycopg2 extras
         query_data = [
-            (msg['sender'], msg['receiver'], json.dumps(msg['content_recipient']), json.dumps(msg['content_sender']))
+            (
+                msg['sender'],
+                msg['receiver'],
+                json.dumps(msg['content_recipient']),
+                json.dumps(msg['content_sender']),
+                msg.get('client_message_id')
+            )
             for msg in messages_batch
         ]
         execute_values(
             cursor,
-            "INSERT INTO chat_history (sender, receiver, content_recipient, content_sender) VALUES %s",
+            "INSERT INTO chat_history (sender, receiver, content_recipient, content_sender, client_message_id) VALUES %s",
             query_data
         )
         conn.commit()
@@ -200,7 +274,7 @@ def get_chat_history_db(user: str, partner: str, limit: int = 50, offset: int = 
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            SELECT sender, receiver, content_recipient, content_sender 
+            SELECT id, sender, receiver, content_recipient, content_sender, client_message_id, timestamp
             FROM chat_history 
             WHERE (sender = %s AND receiver = %s) OR (sender = %s AND receiver = %s)
             ORDER BY id DESC
@@ -212,22 +286,109 @@ def get_chat_history_db(user: str, partner: str, limit: int = 50, offset: int = 
         rows.reverse()
         
         return [{
-            "sender": r[0],
-            "receiver": r[1],
-            "content_recipient": json.loads(r[2]),
-            "content_sender": json.loads(r[3])
+            "id": r[0],
+            "sender": r[1],
+            "receiver": r[2],
+            "content_recipient": json.loads(r[3]),
+            "content_sender": json.loads(r[4]),
+            "client_message_id": r[5],
+            "timestamp": r[6].isoformat() if r[6] else None
         } for r in rows]
     finally:
         release_connection(conn)
 
-def save_offline_message(sender: str, receiver: str, content: list):
+def save_chat_history_message(sender: str, receiver: str, content_recipient: list, content_sender: list, client_message_id: Optional[str] = None):
+    """Persists one encrypted chat packet and returns its database identity."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO chat_history (sender, receiver, content_recipient, content_sender, client_message_id)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, timestamp
+        ''', (
+            sender,
+            receiver,
+            json.dumps(content_recipient),
+            json.dumps(content_sender),
+            client_message_id
+        ))
+        row = cursor.fetchone()
+        conn.commit()
+        return {
+            "id": row[0],
+            "timestamp": row[1].isoformat() if row[1] else None,
+            "client_message_id": client_message_id
+        }
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        release_connection(conn)
+
+def delete_chat_message_db(username: str, message_id: int) -> bool:
+    """Deletes one stored chat message if the requesting user is a participant."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            DELETE FROM chat_history
+            WHERE id = %s
+              AND (sender = %s OR receiver = %s)
+        ''', (message_id, username, username))
+        deleted = cursor.rowcount > 0
+
+        cursor.execute('''
+            DELETE FROM offline_messages
+            WHERE chat_history_id = %s
+              AND (sender = %s OR receiver = %s)
+        ''', (message_id, username, username))
+
+        conn.commit()
+        return deleted
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        release_connection(conn)
+
+def delete_conversation_db(username: str, partner: str) -> int:
+    """Deletes all stored packets for one conversation."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            DELETE FROM chat_history
+            WHERE (sender = %s AND receiver = %s)
+               OR (sender = %s AND receiver = %s)
+        ''', (username, partner, partner, username))
+        deleted = cursor.rowcount
+
+        cursor.execute('''
+            DELETE FROM offline_messages
+            WHERE (sender = %s AND receiver = %s)
+               OR (sender = %s AND receiver = %s)
+        ''', (username, partner, partner, username))
+
+        conn.commit()
+        return deleted
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        release_connection(conn)
+
+def save_offline_message(sender: str, receiver: str, content: list, chat_history_id: Optional[int] = None, client_message_id: Optional[str] = None, timestamp: Optional[str] = None):
     """Saves message for an offline user"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
-            'INSERT INTO offline_messages (sender, receiver, content) VALUES (%s, %s, %s)', 
-            (sender, receiver, json.dumps(content))
+            '''
+            INSERT INTO offline_messages (sender, receiver, content, chat_history_id, client_message_id, timestamp)
+            VALUES (%s, %s, %s, %s, %s, COALESCE(%s::timestamp, CURRENT_TIMESTAMP))
+            ''',
+            (sender, receiver, json.dumps(content), chat_history_id, client_message_id, timestamp)
         )
         conn.commit()
     finally:
@@ -239,15 +400,37 @@ def get_and_delete_offline_messages(receiver: str) -> list:
     cursor = conn.cursor()
     try:
         # Read messages
-        cursor.execute('SELECT sender, content FROM offline_messages WHERE receiver = %s', (receiver,))
+        cursor.execute('''
+            SELECT sender, content, chat_history_id, client_message_id, timestamp
+            FROM offline_messages
+            WHERE receiver = %s
+            ORDER BY id ASC
+        ''', (receiver,))
         rows = cursor.fetchall()
         
         # Delete messages
         cursor.execute('DELETE FROM offline_messages WHERE receiver = %s', (receiver,))
         conn.commit()
-        return [{"sender": row[0], "content": json.loads(row[1])} for row in rows]
+        return [{
+            "sender": row[0],
+            "content": json.loads(row[1]),
+            "id": row[2],
+            "client_message_id": row[3],
+            "timestamp": row[4].isoformat() if row[4] else None
+        } for row in rows]
     finally:
         release_connection(conn)
+
+def _user_row_to_dict(row):
+    username = row[0]
+    public_key_str = row[1]
+
+    try:
+        public_key_obj = json.loads(public_key_str)
+    except (json.JSONDecodeError, TypeError):
+        public_key_obj = public_key_str
+
+    return {"username": username, "public_key": public_key_obj}
 
 # Initialize tables on startup
 init_db()
