@@ -9,7 +9,7 @@ from typing import Dict, Any
 import database 
 
 # Extract the secret key for verifying tokens
-JWT_SECRET = os.getenv("JWT_SECRET_KEY", "super_secret_fallback_key")
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "super_secret_fallback_key_built_32_bytes!!")
 JWT_ALGORITHM = "HS256"
 
 class ConnectionManager:
@@ -34,7 +34,7 @@ class ConnectionManager:
         self.active_connections[websocket]["public_key"] = public_key
         
         # Update public key in the database safely
-        database.register_user_db(username, "", public_key)
+        database.register_user_db(username, "", public_key, "")
         
         offline_msgs = database.get_and_delete_offline_messages(username)
         for msg in offline_msgs:

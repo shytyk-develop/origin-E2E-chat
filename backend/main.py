@@ -22,7 +22,7 @@ app.add_middleware(
 )
 
 # --- JWT CONFIGURATION ---
-JWT_SECRET = os.getenv("JWT_SECRET_KEY", "super_secret_fallback_key")
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "super_secret_fallback_key_built_32_bytes!!")
 JWT_ALGORITHM = "HS256"
 
 def create_access_token(username: str) -> str:
