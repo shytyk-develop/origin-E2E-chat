@@ -1,5 +1,5 @@
 # backend/main.py
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any
@@ -62,10 +62,29 @@ async def login(req: LoginRequest):
         "access_token": token
     }
 
-# --- WEBSOCKET FOR ROUTING MESSAGES ---
+# --- SECURE WEBSOCKET FOR ROUTING MESSAGES ---
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    # New client connects
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):    
+    # 1. Guard clause for missing token
+    if not token:
+        print("❌ Handshake blocked: missing token parameter")
+        await websocket.close(code=1008, reason="Missing token")
+        return
+        
+    # 2. Decode and cryptographically verify the JWT signature
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        token_username = payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        print("🕒 Handshake blocked: presented token is expired")
+        await websocket.close(code=1008, reason="Token expired")
+        return
+    except jwt.InvalidTokenError:
+        print("❌ Handshake blocked: fraudulent token signature")
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    # 3. Handshake successful — establish WebSocket connection
     await manager.connect(websocket)
     try:
         while True:
@@ -73,17 +92,14 @@ async def websocket_endpoint(websocket: WebSocket):
             data = json.loads(data_str)
             
             if data["type"] == "join":
-                # Securely pass the token to the upgraded registration method
-                success = await manager.register_user(
-                    websocket, 
-                    data["username"], 
-                    data["public_key"], 
-                    data.get("token", "") # Securely extract the incoming token
-                )
-                
-                # Broadcast the updated users list only if the JWT token is valid
-                if success:
-                    await manager.broadcast_users_list()
+                # Multi-layered check: match the packet username with the signature subject
+                if data["username"] != token_username:
+                    print(f"⚠️ Security alert: Identity theft attempt detected from token payload context")
+                    await websocket.close(code=1008, reason="Identity theft detected")
+                    return
+                    
+                await manager.register_user(websocket, data["username"], data["public_key"])
+                await manager.broadcast_users_list()
                 
             elif data["type"] == "message":
                 await manager.send_personal_message(data, websocket)
