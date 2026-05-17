@@ -81,6 +81,9 @@ async function handleAuth(isLogin) {
             const resData = await res.json();
             state.token = resData.access_token;
 
+            localStorage.setItem('auth_token', state.token);
+            localStorage.setItem('auth_username', username);
+
             let savedKeysJWK = loadKeys(username);
             
             if (!savedKeysJWK) {
@@ -137,11 +140,11 @@ function showAuthMessage(text, isError) {
 }
 
 // Runs after SUCCESSFUL login
-function finishLoginSetup(username, exportedPublicKeyJSON) {
+function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat') {
     state.myUsername = username;
     state.chatHistory = loadHistory(state.myUsername);
     
-    navigateTo('/chat', handleNavigation);
+    navigateTo(targetPath, handleNavigation);
 
     socket = connectToServer(
         state.token,
@@ -267,4 +270,42 @@ DOM.btnLogin.addEventListener('click', () => handleAuth(true));
 DOM.btnRegister.addEventListener('click', () => handleAuth(false));
 DOM.sendBtn.addEventListener('click', window.handleSendMessage); 
 
-initRouter(handleNavigation);
+// Asynchronous application rehydration task to process auto-logins on page reloads
+async function initializeApp() {
+    const savedToken = localStorage.getItem('auth_token');
+    const savedUsername = localStorage.getItem('auth_username');
+    const initialPath = window.location.pathname;
+
+    if (savedToken && savedUsername) {
+        const savedKeysJWK = loadKeys(savedUsername);
+        if (savedKeysJWK) {
+            try {
+                // Restore tokens to active RAM state boundaries
+                state.token = savedToken;
+                state.myUsername = savedUsername;
+                state.myKeys = {
+                    publicKey: await importPublicKey(savedKeysJWK.publicKey),
+                    privateKey: await importPrivateKey(savedKeysJWK.privateKey)
+                };
+                
+                // Fire up setup and bypass login form, preserving the current deep-linked path
+                const routeFallback = (initialPath === '/' || initialPath === '/login') ? '/chat' : initialPath;
+                finishLoginSetup(savedUsername, savedKeysJWK.publicKey, routeFallback);
+                return;
+            } catch (err) {
+                console.error("Session rehydration failed:", err);
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('auth_username');
+            }
+        }
+    }
+
+    // Default flow: Boot the client-side router normally if no session exists
+    initRouter(handleNavigation);
+    if (initialPath === '/' || initialPath === '/chat') {
+        navigateTo('/login', handleNavigation);
+    }
+}
+
+// Trigger the application boot sequence
+initializeApp();
