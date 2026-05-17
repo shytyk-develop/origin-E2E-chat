@@ -62,28 +62,43 @@ class ConnectionManager:
         for ws in self.active_connections.keys():
             await ws.send_text(message_json)
 
-    async def send_personal_message(self, message_data: dict, sender_ws: WebSocket):
-        target_username = message_data.get("to")
-        sender_username = self.active_connections[sender_ws]["username"]
-        content = message_data["content"]
+    async def send_personal_message(self, data: dict, sender_websocket: WebSocket):
         
-        # Search for the recipient by their username
-        target_ws = None
-        for ws, data in self.active_connections.items():
-            if data["username"] == target_username:
-                target_ws = ws
+        target_username = data.get("to")
+        content = data.get("content") 
+
+        # 1. Safely identify who is sending the message
+        sender_session = self.active_connections.get(sender_websocket, {})
+        sender_username = sender_session.get("username", "Unknown")
+        
+        # 2. Rebuild the clear text packet for delivery
+        packet = {
+            "type": "message",
+            "from": sender_username,
+            "content": content
+        }
+        
+        # 3. Try to find the recipient's active socket
+        target_websocket = None
+        for ws, session in self.active_connections.items():
+            if session.get("username") == target_username:
+                target_websocket = ws
                 break
                 
-        if target_ws:
-            # Recipient is online — deliver instantly via WebSocket
-            packet = {
-                "type": "message",
-                "from": sender_username,
-                "content": content
-            }
-            await target_ws.send_text(json.dumps(packet))
+        # 4. ROUTING CRITICAL LOGIC
+        if target_websocket:
+            try:
+                await target_websocket.send_text(json.dumps(packet))
+                print(f"✉️ Real-time delivery: from {sender_username} to {target_username}")
+            except Exception as e:
+                print(f"⚠️ Stale socket detected for {target_username}. Redirecting to DB. Error: {e}")
+                # Clean up the dead connection immediately to prevent memory leaks
+                self.disconnect(target_websocket)
+                # Fallback to database queue
+                database.save_offline_message(sender_username, target_username, content)
         else:
-            # Recipient is offline — store encrypted data in PostgreSQL queue
+            # TARGET IS OFFLINE
+            print(f"🌙 {target_username} is offline. Saving message to PostgreSQL queue...")
             database.save_offline_message(sender_username, target_username, content)
 
 manager = ConnectionManager()
