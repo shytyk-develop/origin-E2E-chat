@@ -1,5 +1,5 @@
 # backend/main.py
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Response, Query, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Any
@@ -51,42 +51,51 @@ async def register(req: RegisterRequest):
     return {"message": "Registration successful"}
 
 @app.post("/api/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, response: Response):
+    """Authenticates user and bakes the JWT session token inside an HttpOnly Cookie"""
     user_keys = database.login_user_db(req.username, req.password)
     if user_keys is None:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
     token = create_access_token(req.username)
+    
+    # Set the cookie securely on the client browser
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,     # JS cannot read this cookie
+        samesite="lax",    
+        secure=True,       
+        max_age=86400      # 24 hours lifespan in seconds
+    )
+    
     return {
         "message": "Login successful", 
-        "access_token": token,
         "public_key": user_keys["public_key"],
-        "encrypted_private_key": user_keys["encrypted_private_key"]  # Synchronize the encrypted backup back to the client
+        "encrypted_private_key": user_keys["encrypted_private_key"]
     }
 
 # --- SECURE WEBSOCKET FOR ROUTING MESSAGES ---
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):    
-    # 1. Guard clause for missing token
-    if not token:
-        print("❌ Handshake blocked: missing token parameter")
-        await websocket.close(code=1008, reason="Missing token")
+async def websocket_endpoint(websocket: WebSocket, access_token: str = Cookie(None)):    
+    """FastAPI automatically extracts the 'access_token' cookie from handshake headers"""
+    
+    # 1. Guard clause for missing authentication cookie
+    if not access_token:
+        print("❌ Handshake blocked: authentication cookie is missing")
+        await websocket.close(code=1008, reason="Missing auth cookie")
         return
         
-    # 2. Decode and cryptographically verify the JWT signature
+    # 2. Decode and cryptographically verify the JWT signature from cookie
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(access_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         token_username = payload.get("sub")
-    except jwt.ExpiredSignatureError:
-        print("🕒 Handshake blocked: presented token is expired")
-        await websocket.close(code=1008, reason="Token expired")
-        return
-    except jwt.InvalidTokenError:
-        print("❌ Handshake blocked: fraudulent token signature")
-        await websocket.close(code=1008, reason="Invalid token")
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        print("❌ Handshake blocked: invalid or expired authentication cookie")
+        await websocket.close(code=1008, reason="Invalid auth cookie")
         return
 
-    # 3. Handshake successful — establish WebSocket connection
+    # 3. Handshake successful — establish WebSocket connection via manager
     await manager.connect(websocket)
     try:
         while True:
