@@ -6,6 +6,7 @@ from typing import Any
 import json
 import jwt
 import os
+import asyncio
 from datetime import datetime, timedelta
 
 from ws_manager import manager 
@@ -24,6 +25,31 @@ app.add_middleware(
 # --- JWT CONFIGURATION ---
 JWT_SECRET = os.getenv("JWT_SECRET_KEY", "super_secret_fallback_key_built_32_bytes!!")
 JWT_ALGORITHM = "HS256"
+
+# --- ASYNC MEMORY BUFFER FOR BATCH WRITES ---
+db_write_queue = asyncio.Queue()
+
+async def batch_history_flush_worker():
+    """Background task worker that gathers database writes and executes them in massive batches"""
+    while True:
+        await asyncio.sleep(2.0)  # Flush queue to disk every 2 seconds
+        batch = []
+        while not db_write_queue.empty():
+            item = await db_write_queue.get()
+            batch.append(item)
+            db_write_queue.task_done()
+        
+        if batch:
+            try:
+                database.save_chat_history_batch(batch)
+                print(f"📦 High-load Flush: Successfully batched {len(batch)} messages into PostgreSQL disk storage.")
+            except Exception as e:
+                print(f"❌ Critical high-load error writing batch chunk to PostgreSQL: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    """Triggers the async worker tasks on microservice booting sequence"""
+    asyncio.create_task(batch_history_flush_worker())
 
 def create_access_token(username: str) -> str:
     """Generates a secure access token valid for 24 hours"""
@@ -65,18 +91,19 @@ async def login(req: LoginRequest):
         "encrypted_private_key": user_keys["encrypted_private_key"]
     }
 
+@app.get("/api/history")
+async def get_history(user: str, partner: str, limit: int = Query(50), offset: int = Query(0)):
+    """Returns a slice of double-encrypted messaging payload blocks protecting against backend over-allocations"""
+    return database.get_chat_history_db(user, partner, limit=limit, offset=offset)
+
 # --- SECURE WEBSOCKET FOR ROUTING MESSAGES ---
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):    
-    """The token is securely verified during the encrypted TLS handshake via query parameters"""
-    
-    # 1. Guard clause for missing token parameter
     if not token:
         print("❌ Handshake blocked: missing token parameter")
         await websocket.close(code=1008, reason="Missing token")
         return
         
-    # 2. Decode and cryptographically verify the JWT signature
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         token_username = payload.get("sub")
@@ -85,7 +112,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
         await websocket.close(code=1008, reason="Invalid token")
         return
 
-    # 3. Handshake successful — establish WebSocket connection via manager
     await manager.connect(websocket)
     try:
         while True:
@@ -93,7 +119,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
             data = json.loads(data_str)
             
             if data["type"] == "join":
-                # Multi-layered check: match the packet username with the signature subject
                 if data["username"] != token_username:
                     print(f"⚠️ Security alert: Identity theft attempt detected from token payload context")
                     await websocket.close(code=1008, reason="Identity theft detected")
@@ -106,5 +131,4 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 await manager.send_personal_message(data, websocket)
             
     except WebSocketDisconnect:
-        # If client closes the tab/disconnects — remove them
         manager.disconnect(websocket)
