@@ -4,6 +4,7 @@ import {
     DOM,
     updateStatus,
     renderUsersList,
+    setSidebarChats,
     activateChatPanel,
     resetChatPanel,
     appendMessage,
@@ -65,13 +66,14 @@ import {
     loginRequest,
     registerRequest,
     searchUsers,
+    getChats,
     getUser,
     getHistory,
     deleteMessage,
     deleteConversation
 } from './api.js';
 
-let socket = null;
+let socketConnection = null;
 let routerReady = false;
 let contactSearchTimer = null;
 let state = {
@@ -80,9 +82,59 @@ let state = {
     token: null,
     currentTargetUser: null,
     usersDirectory: {},
+    sidebarChats: [],
     chatHistory: {},
     preferences: loadPreferences()
 };
+
+function getSocket() {
+    return socketConnection?.current || null;
+}
+
+function onContactSelected(username) {
+    navigateTo(`/chat/@${username}`, handleNavigation);
+}
+
+function renderSidebar() {
+    setSidebarChats(
+        state.sidebarChats,
+        state.myUsername,
+        onContactSelected,
+        state.currentTargetUser
+    );
+}
+
+function upsertSidebarChat(partner, extras = {}) {
+    if (!partner || partner === state.myUsername) return;
+
+    const username = normalizeUsername(partner);
+    const existingIndex = state.sidebarChats.findIndex(chat => chat.username === username);
+    const merged = {
+        ...(existingIndex >= 0 ? state.sidebarChats[existingIndex] : { username }),
+        ...extras,
+        username,
+    };
+
+    if (existingIndex >= 0) {
+        state.sidebarChats.splice(existingIndex, 1);
+    }
+    state.sidebarChats.unshift(merged);
+
+    if (merged.public_key) {
+        state.usersDirectory[username] = merged.public_key;
+    }
+    renderSidebar();
+}
+
+function handleNewChatEvent(data) {
+    const partner = data?.partner;
+    if (!partner?.username) return;
+
+    upsertSidebarChat(partner.username, {
+        public_key: partner.public_key,
+        last_message_at: data.last_message_at || new Date().toISOString(),
+    });
+}
 
 applyPreferences(state.preferences);
 setPreferenceControls(state.preferences);
@@ -188,6 +240,22 @@ function showAuthMessage(text, isError) {
     DOM.authError.classList.toggle('text-green-400', !isError);
 }
 
+async function loadSidebarChats() {
+    if (!state.token || !state.myUsername) return;
+
+    try {
+        const chats = await getChats(state.token, 50);
+        state.sidebarChats = chats;
+        chats.forEach(chat => {
+            state.usersDirectory[chat.username] = chat.public_key;
+        });
+        renderSidebar();
+    } catch (err) {
+        console.error("Sidebar sync failed:", err);
+        renderSidebar();
+    }
+}
+
 // Runs after SUCCESSFUL login
 function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat') {
     state.myUsername = username;
@@ -195,27 +263,38 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
 
     ensureRouter();
     navigateTo(targetPath, handleNavigation);
+    loadSidebarChats();
 
-    socket = connectToServer(
+    if (socketConnection) {
+        socketConnection.close();
+    }
+
+    socketConnection = connectToServer(
         state.token,
-        () => {
+        (activeSocket) => {
             updateStatus("Online", "text-green-500");
-            sendPacket(socket, "join", { 
-                username: state.myUsername, 
-                public_key: exportedPublicKeyJSON 
+            sendPacket(activeSocket, "join", {
+                username: state.myUsername,
+                public_key: exportedPublicKeyJSON
             });
         },
         async (event) => {
             const data = JSON.parse(event.data);
-            
+
             if (data.type === "users_list") {
                 data.users.forEach(u => {
                     state.usersDirectory[u.username] = u.public_key;
                 });
-            } 
+            }
+            else if (data.type === "new_chat") {
+                handleNewChatEvent(data);
+            }
             else if (data.type === "message") {
                 const encryptedBytes = new Uint8Array(data.content);
                 const decryptedText = await decryptMessage(state.myKeys.privateKey, encryptedBytes);
+                upsertSidebarChat(data.from, {
+                    last_message_at: data.timestamp || new Date().toISOString(),
+                });
                 processMessage(data.from, {
                     id: data.id,
                     clientMessageId: data.client_message_id,
@@ -225,11 +304,20 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                     timestamp: data.timestamp || Date.now()
                 });
             }
+            else if (data.type === "message_sync") {
+                markMessageSynced(data.client_message_id, data.id, data.timestamp);
+            }
             else if (data.type === "message_ack") {
                 markMessageSynced(data.client_message_id, data.id, data.timestamp);
             }
         },
-        () => updateStatus("Disconnected", "text-red-500")
+        (event, closedByUser) => {
+            if (!closedByUser) {
+                updateStatus("Reconnecting...", "text-yellow-500");
+                return;
+            }
+            updateStatus("Disconnected", "text-red-500");
+        }
     );
 }
 
@@ -389,7 +477,7 @@ async function handleSendMessage() {
         const encryptedArraySender = Array.from(new Uint8Array(encryptedBufferSelf));
         const clientMessageId = crypto.randomUUID();
 
-        const sent = sendPacket(socket, "message", {
+        const sent = sendPacket(getSocket(), "message", {
             to: state.currentTargetUser,
             content_recipient: encryptedArrayRecipient,
             content_sender: encryptedArraySender,
@@ -399,6 +487,11 @@ async function handleSendMessage() {
         if (!sent) {
             throw new Error("WebSocket is not connected");
         }
+
+        upsertSidebarChat(state.currentTargetUser, {
+            public_key: targetPublicKeyJWK,
+            last_message_at: new Date().toISOString(),
+        });
 
         processMessage(state.currentTargetUser, {
             clientMessageId,
@@ -557,7 +650,7 @@ function handleContactSearchInput() {
     window.clearTimeout(contactSearchTimer);
 
     if (query.length < 2) {
-        clearUsersList();
+        renderSidebar();
         return;
     }
 
@@ -573,9 +666,7 @@ async function performUserSearch(query) {
         users.forEach(user => {
             state.usersDirectory[user.username] = user.public_key;
         });
-        renderUsersList(users, state.myUsername, (selectedUser) => {
-            navigateTo(`/chat/@${selectedUser}`, handleNavigation);
-        }, state.currentTargetUser);
+        renderUsersList(users, state.myUsername, onContactSelected, state.currentTargetUser);
     } catch (err) {
         console.error("User search failed:", err);
         clearUsersList("Search failed");
@@ -599,8 +690,8 @@ function persistCurrentDraft() {
 function refreshUsersDirectory() {
     const query = normalizeUsername(DOM.contactSearchInput.value);
     if (query.length < 2) {
-        focusContactSearch();
-        showToast("Type at least 2 characters to search.", "error");
+        loadSidebarChats();
+        showToast("Conversations refreshed.", "success");
         return;
     }
 
@@ -674,9 +765,11 @@ async function clearCurrentChat() {
     try {
         await deleteConversation(state.token, partner);
         state.chatHistory[partner] = [];
+        state.sidebarChats = state.sidebarChats.filter(chat => chat.username !== partner);
         DOM.messagesDiv.innerHTML = "";
         clearDraft(state.myUsername, partner);
         saveHistory(state.myUsername, state.chatHistory);
+        renderSidebar();
         closeAllPopovers();
         showToast("Chat history deleted from database.", "success");
     } catch (err) {
@@ -714,9 +807,9 @@ async function deleteSingleMessage(messageId) {
 function handleLogout() {
     persistCurrentDraft();
 
-    if (socket) {
-        socket.close();
-        socket = null;
+    if (socketConnection) {
+        socketConnection.close();
+        socketConnection = null;
     }
     window.clearTimeout(contactSearchTimer);
 
@@ -728,13 +821,13 @@ function handleLogout() {
     state.token = null;
     state.currentTargetUser = null;
     state.usersDirectory = {};
+    state.sidebarChats = [];
     state.chatHistory = {};
 
     DOM.usernameInput.value = "";
     DOM.passwordInput.value = "";
     DOM.contactSearchInput.value = "";
     filterUsers("");
-    renderUsersList([], "", () => {});
     clearUsersList();
     resetChatPanel();
     updateStatus("Disconnected", "text-red-500");

@@ -107,6 +107,16 @@ def init_db():
         ''')
 
         cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_chat_history_sender
+            ON chat_history (sender);
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_chat_history_receiver
+            ON chat_history (receiver);
+        ''')
+
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_chat_history_timestamp
             ON chat_history (timestamp);
         ''')
@@ -217,6 +227,61 @@ def search_users_db(query: str, current_username: str, limit: int = 20) -> list:
         ))
         rows = cursor.fetchall()
         return [_user_row_to_dict(row) for row in rows]
+    finally:
+        release_connection(conn)
+
+def conversation_exists_db(user: str, partner: str) -> bool:
+    """Returns True when at least one message exists between two users."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT 1
+            FROM chat_history
+            WHERE (sender = %s AND receiver = %s)
+               OR (sender = %s AND receiver = %s)
+            LIMIT 1
+        ''', (user, partner, partner, user))
+        return cursor.fetchone() is not None
+    finally:
+        release_connection(conn)
+
+def get_chat_partners_db(username: str, limit: int = 50) -> list:
+    """Returns sidebar contacts: users with at least one message, newest first."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        safe_limit = max(1, min(limit, 100))
+        cursor.execute('''
+            WITH partners AS (
+                SELECT
+                    CASE
+                        WHEN sender = %s THEN receiver
+                        ELSE sender
+                    END AS partner,
+                    MAX(timestamp) AS last_message_at,
+                    MAX(id) AS last_message_id
+                FROM chat_history
+                WHERE sender = %s OR receiver = %s
+                GROUP BY partner
+            )
+            SELECT
+                p.partner,
+                u.public_key,
+                p.last_message_at,
+                p.last_message_id
+            FROM partners p
+            INNER JOIN users u ON u.username = p.partner
+            ORDER BY p.last_message_at DESC NULLS LAST, p.last_message_id DESC
+            LIMIT %s
+        ''', (username, username, username, safe_limit))
+        rows = cursor.fetchall()
+        return [{
+            "username": row[0],
+            "public_key": _parse_public_key(row[1]),
+            "last_message_at": row[2].isoformat() if row[2] else None,
+            "last_message_id": row[3],
+        } for row in rows]
     finally:
         release_connection(conn)
 
@@ -421,16 +486,17 @@ def get_and_delete_offline_messages(receiver: str) -> list:
     finally:
         release_connection(conn)
 
-def _user_row_to_dict(row):
-    username = row[0]
-    public_key_str = row[1]
-
+def _parse_public_key(public_key_str):
     try:
-        public_key_obj = json.loads(public_key_str)
+        return json.loads(public_key_str)
     except (json.JSONDecodeError, TypeError):
-        public_key_obj = public_key_str
+        return public_key_str
 
-    return {"username": username, "public_key": public_key_obj}
+def _user_row_to_dict(row):
+    return {
+        "username": row[0],
+        "public_key": _parse_public_key(row[1])
+    }
 
 # Initialize tables on startup
 init_db()

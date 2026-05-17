@@ -25,6 +25,10 @@ export async function registerRequest({ username, password, publicKey, encrypted
     });
 }
 
+export async function getChats(token, limit = 50) {
+    return getJson(`/api/chats?limit=${limit}`, token);
+}
+
 export async function searchUsers(token, query, limit = 20) {
     if (query.length < 2) return [];
     return getJson(`/api/users/search?q=${encodeURIComponent(query)}&limit=${limit}`, token);

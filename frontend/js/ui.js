@@ -71,9 +71,11 @@ if (missingDomKeys.length) {
 
 const contactsState = {
     users: [],
+    sidebarChats: [],
     myUsername: '',
     activeUsername: null,
     query: '',
+    searchMode: false,
     onUserSelect: null
 };
 
@@ -93,11 +95,21 @@ export function updateStatus(status, colorClass) {
     DOM.statusSpan.className = isOnline ? 'status-online' : 'status-offline';
 }
 
+export function setSidebarChats(chats, myUsername, onUserSelect, activeUsername = contactsState.activeUsername) {
+    contactsState.sidebarChats = Array.isArray(chats) ? chats : [];
+    contactsState.myUsername = myUsername;
+    contactsState.onUserSelect = onUserSelect;
+    contactsState.activeUsername = activeUsername;
+    contactsState.searchMode = false;
+    renderFilteredUsers();
+}
+
 export function renderUsersList(users, myUsername, onUserSelect, activeUsername = contactsState.activeUsername) {
     contactsState.users = Array.isArray(users) ? users : [];
     contactsState.myUsername = myUsername;
     contactsState.onUserSelect = onUserSelect;
     contactsState.activeUsername = activeUsername;
+    contactsState.searchMode = true;
     renderFilteredUsers();
 }
 
@@ -106,13 +118,18 @@ export function filterUsers(query) {
     renderFilteredUsers();
 }
 
-export function clearUsersList(message = 'Type at least 2 chars') {
+export function clearUsersList(message = 'No conversations yet') {
     contactsState.users = [];
-    DOM.usersListDiv.innerHTML = '';
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.textContent = message;
-    DOM.usersListDiv.appendChild(empty);
+    contactsState.searchMode = false;
+    if (!contactsState.sidebarChats.length) {
+        DOM.usersListDiv.innerHTML = '';
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = message;
+        DOM.usersListDiv.appendChild(empty);
+        return;
+    }
+    renderFilteredUsers();
 }
 
 export function activateChatPanel(username) {
@@ -374,23 +391,26 @@ export function setChatToolsEnabled(isEnabled) {
 function renderFilteredUsers() {
     DOM.usersListDiv.innerHTML = '';
 
-    if (!contactsState.query) {
-        const empty = document.createElement('div');
-        empty.className = 'empty-state';
-        empty.textContent = 'Type username to search';
-        DOM.usersListDiv.appendChild(empty);
-        return;
-    }
+    const sourceUsers = contactsState.searchMode
+        ? contactsState.users
+        : contactsState.sidebarChats;
 
-    const visibleUsers = contactsState.users.filter(user => {
+    const visibleUsers = sourceUsers.filter(user => {
         if (user.username === contactsState.myUsername) return false;
+        if (!contactsState.query) return true;
         return user.username.toLowerCase().includes(contactsState.query);
     });
 
     if (!visibleUsers.length) {
         const empty = document.createElement('div');
         empty.className = 'empty-state';
-        empty.textContent = contactsState.query ? 'No matching nodes' : 'No active nodes';
+        if (contactsState.searchMode) {
+            empty.textContent = contactsState.query ? 'No matching nodes' : 'Type at least 2 characters';
+        } else if (contactsState.query) {
+            empty.textContent = 'No matching conversations';
+        } else {
+            empty.textContent = 'No conversations yet';
+        }
         DOM.usersListDiv.appendChild(empty);
         return;
     }
@@ -406,20 +426,43 @@ function renderFilteredUsers() {
         avatar.className = 'contact-avatar';
         avatar.textContent = getInitials(user.username);
 
+        const meta = document.createElement('div');
+        meta.className = 'contact-meta';
+
         const name = document.createElement('div');
         name.className = 'contact-name';
         name.textContent = user.username;
+
+        const subtitle = document.createElement('div');
+        subtitle.className = 'contact-subtitle';
+        subtitle.textContent = user.last_message_at
+            ? formatSidebarTime(user.last_message_at)
+            : 'Secure channel';
+
+        meta.append(name, subtitle);
 
         const presence = document.createElement('div');
         presence.className = 'contact-presence';
         presence.setAttribute('aria-hidden', 'true');
 
-        btn.append(avatar, name, presence);
+        btn.append(avatar, meta, presence);
         btn.onclick = () => contactsState.onUserSelect?.(user.username);
         DOM.usersListDiv.appendChild(btn);
     });
 
     setActiveContact(contactsState.activeUsername);
+}
+
+function formatSidebarTime(isoValue) {
+    const date = new Date(isoValue);
+    if (Number.isNaN(date.getTime())) return 'Recent activity';
+
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function setActiveContact(username) {
