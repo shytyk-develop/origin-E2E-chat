@@ -35,6 +35,7 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     public_key: Any
+    encrypted_private_key: str  # Encrypted key backup for multi-device sync
 
 class LoginRequest(BaseModel):
     username: str
@@ -44,22 +45,23 @@ class LoginRequest(BaseModel):
 
 @app.post("/api/register")
 async def register(req: RegisterRequest):
-    success = database.register_user_db(req.username, req.password, req.public_key)
+    success = database.register_user_db(req.username, req.password, req.public_key, req.encrypted_private_key)
     if not success:
         raise HTTPException(status_code=400, detail="Username is already taken")
     return {"message": "Registration successful"}
 
 @app.post("/api/login")
 async def login(req: LoginRequest):
-    public_key = database.login_user_db(req.username, req.password)
-    if public_key is None:
+    user_keys = database.login_user_db(req.username, req.password)
+    if user_keys is None:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
     token = create_access_token(req.username)
     return {
         "message": "Login successful", 
-        "public_key": public_key,
-        "access_token": token
+        "access_token": token,
+        "public_key": user_keys["public_key"],
+        "encrypted_private_key": user_keys["encrypted_private_key"]  # Synchronize the encrypted backup back to the client
     }
 
 # --- SECURE WEBSOCKET FOR ROUTING MESSAGES ---

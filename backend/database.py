@@ -34,6 +34,12 @@ def init_db():
         ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT '';
     ''')
     
+    # Safely migrate the schema to support multi-device syncing without dropping data
+    cursor.execute('''
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS encrypted_private_key TEXT NOT NULL DEFAULT '';
+    ''')
+    
     # Offline messages table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS offline_messages (
@@ -60,8 +66,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # --- USER FUNCTIONS ---
 
-def register_user_db(username: str, password: str, public_key) -> bool:
-    """Registers a new user with a hashed password and public key"""
+def register_user_db(username: str, password: str, public_key, encrypted_private_key: str) -> bool:
+    """Registers a new user with a hashed password, public key, and synced private key"""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -75,8 +81,8 @@ def register_user_db(username: str, password: str, public_key) -> bool:
     
     try:
         cursor.execute(
-            'INSERT INTO users (username, password_hash, public_key) VALUES (%s, %s, %s)', 
-            (username, hashed_pw, public_key_str)
+            'INSERT INTO users (username, password_hash, public_key, encrypted_private_key) VALUES (%s, %s, %s, %s)', 
+            (username, hashed_pw, public_key_str, encrypted_private_key)
         )
         conn.commit()
         return True
@@ -87,23 +93,28 @@ def register_user_db(username: str, password: str, public_key) -> bool:
         conn.close()
 
 def login_user_db(username: str, password: str):
-    """Authenticates a user and returns their verified public key"""
+    """Authenticates a user and returns their keys for cross-device synchronization"""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT password_hash, public_key FROM users WHERE username = %s', (username,))
+    cursor.execute('SELECT password_hash, public_key, encrypted_private_key FROM users WHERE username = %s', (username,))
     row = cursor.fetchone()
     conn.close()
     
     if row is None:
         return None
         
-    db_hash, db_pub_key_str = row[0], row[1]
+    db_hash, db_pub_key_str, db_enc_priv_key = row[0], row[1], row[2]
     
     if verify_password(password, db_hash):
         try:
-            return json.loads(db_pub_key_str)
+            pub_key_obj = json.loads(db_pub_key_str)
         except (json.JSONDecodeError, TypeError):
-            return db_pub_key_str
+            pub_key_obj = db_pub_key_str
+            
+        return {
+            "public_key": pub_key_obj,
+            "encrypted_private_key": db_enc_priv_key
+        }
     return None
 
 def get_all_users() -> list:
