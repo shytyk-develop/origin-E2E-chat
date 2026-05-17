@@ -73,9 +73,17 @@ async def websocket_endpoint(websocket: WebSocket):
             data = json.loads(data_str)
             
             if data["type"] == "join":
-                # Delegate registration to the new manager method
-                await manager.register_user(websocket, data["username"], data["public_key"])
-                await manager.broadcast_users_list()
+                # Securely pass the token to the upgraded registration method
+                success = await manager.register_user(
+                    websocket, 
+                    data["username"], 
+                    data["public_key"], 
+                    data.get("token", "") # Securely extract the incoming token
+                )
+                
+                # Broadcast the updated users list only if the JWT token is valid
+                if success:
+                    await manager.broadcast_users_list()
                 
             elif data["type"] == "message":
                 await manager.send_personal_message(data, websocket)

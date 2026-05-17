@@ -1,10 +1,16 @@
 # backend/ws_manager.py
 from fastapi import WebSocket
 import json
+import jwt
+import os
 from typing import Dict, Any
 
 # Import database module
 import database 
+
+# Extract the secret key for verifying tokens
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "super_secret_fallback_key")
+JWT_ALGORITHM = "HS256"
 
 class ConnectionManager:
     def __init__(self):
@@ -20,11 +26,35 @@ class ConnectionManager:
         if websocket in self.active_connections:
             del self.active_connections[websocket]
 
-    async def register_user(self, websocket: WebSocket, username: str, public_key: str):
-        """Registers a user upon joining the chat"""
+    async def register_user(self, websocket: WebSocket, username: str, public_key: str, token: str):
+        """Registers a user upon verifying their signature via a JWT token"""
+        
+        # --- 1. TOKEN VALIDATION ---
+        try:
+            # Decode the payload and cryptographically verify the signature
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            
+            # Check if the token subject matches the claiming username
+            if payload.get("sub") != username:
+                print(f"⚠️ Security alert: {username} tried to use someone else's token!")
+                await websocket.close(code=1008, reason="Invalid token owner")
+                return False
+                
+        except jwt.ExpiredSignatureError:
+            print(f"🕒 Token expired for {username}")
+            await websocket.close(code=1008, reason="Token expired")
+            return False
+            
+        except (jwt.InvalidTokenError, ValueError):
+            print(f"❌ Invalid token presented by {username}")
+            await websocket.close(code=1008, reason="Invalid token")
+            return False
+
+        # --- 2. SUCCESSFUL AUTHENTICATION — ACCESS GRANTED ---
         self.active_connections[websocket]["username"] = username
         self.active_connections[websocket]["public_key"] = public_key
         
+        # Update public key in the database safely
         database.register_user_db(username, "", public_key)
         
         offline_msgs = database.get_and_delete_offline_messages(username)
@@ -35,6 +65,8 @@ class ConnectionManager:
                 "content": msg["content"]
             }
             await websocket.send_text(json.dumps(packet))
+            
+        return True
 
     async def broadcast_users_list(self):
         # Fetch the contact list from the Database instead of RAM
