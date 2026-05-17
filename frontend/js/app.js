@@ -12,6 +12,7 @@ let socket = null;
 let state = {
     myUsername: null,
     myKeys: null,
+    token: null,
     currentTargetUser: null,
     usersDirectory: {},
     chatHistory: {}
@@ -66,6 +67,7 @@ async function handleAuth(isLogin) {
 
     try {
         if (isLogin) {
+
             // --- LOGIN LOGIC ---
             const res = await fetch(`${API_URL}/api/login`, {
                 method: 'POST',
@@ -74,6 +76,10 @@ async function handleAuth(isLogin) {
             });
 
             if (!res.ok) throw new Error("Invalid username or password");
+
+            // Extract the access token from the server response
+            const resData = await res.json();
+            state.token = resData.access_token;
 
             // Look for keys in local storage
             const savedKeysJWK = loadKeys(username);
@@ -87,9 +93,11 @@ async function handleAuth(isLogin) {
                 privateKey: await importPrivateKey(savedKeysJWK.privateKey)
             };
             
-            finishLoginSetup(username, savedKeysJWK.publicKey);
+            // Pass the extracted token to the final setup step
+            finishLoginSetup(username, savedKeysJWK.publicKey, state.token);
 
         } else {
+
             // --- REGISTRATION LOGIC ---
             // 1. Generate new key pair
             state.myKeys = await generateKeyPair();
@@ -124,15 +132,16 @@ function showAuthMessage(text, isError) {
 }
 
 // Runs after SUCCESSFUL login
-function finishLoginSetup(username, exportedPublicKeyJSON) {
+function finishLoginSetup(username, exportedPublicKeyJSON, token) {
     state.myUsername = username;
     state.chatHistory = loadHistory(state.myUsername);
     
     // Clean redirect via SPA
     navigateTo('/chat', handleNavigation);
 
-    // Establish WebSocket connection
+    // Establish WebSocket connection with cryptographic token authorization
     socket = connectToServer(
+        token,
         // onOpen
         () => {
             updateStatus("Online", "text-green-500");

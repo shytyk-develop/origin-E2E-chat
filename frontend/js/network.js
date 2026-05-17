@@ -1,20 +1,32 @@
 // frontend/js/network.js
 
-/* Connection function (accepts callbacks for event handling) */
-export function connectToServer(onOpen, onMessage, onClose) {
-    const ws = new WebSocket("wss://originhub.onrender.com/ws");
+/* Establishes a secure WebSocket connection using a JWT token via query parameters */
+export function connectToServer(token, onOpen, onMessage, onClose) {
+    const WS_URL = `wss://originhub.onrender.com/ws?token=${token}`;
+
+    const socket = new WebSocket(WS_URL);
     
-    ws.onopen = onOpen;
-    ws.onmessage = onMessage;
-    ws.onclose = onClose;
+    socket.onopen = () => {
+        console.log("WebSocket connected securely!");
+        if (onOpen) onOpen();
+    };
     
-    return ws;
+    socket.onmessage = (event) => {
+        if (onMessage) onMessage(event);
+    };
+    
+    socket.onclose = (event) => {
+        print(`WebSocket closed: Code ${event.code}, Reason: ${event.reason}`);
+        if (onClose) onClose();
+    };
+    
+    return socket;
 }
 
-/* Helper function for sending JSON packets */
-export function sendPacket(ws, type, payload) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
+/* Helper function for sending JSON packets over an active WebSocket connection */
+export function sendPacket(socket, type, payload) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
         const packet = { type: type, ...payload };
-        ws.send(JSON.stringify(packet));
+        socket.send(JSON.stringify(packet));
     }
 }
