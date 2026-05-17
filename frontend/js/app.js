@@ -2,7 +2,17 @@
 
 import { DOM, updateStatus, renderUsersList, activateChatPanel, appendMessage } from './ui.js';
 import { connectToServer, sendPacket } from './network.js';
-import { generateKeyPair, exportPublicKey, exportPrivateKey, importPublicKey, importPrivateKey, encryptMessage, decryptMessage } from './crypto.js';
+import { 
+    generateKeyPair, 
+    exportPublicKey, 
+    exportPrivateKey, 
+    importPublicKey, 
+    importPrivateKey, 
+    encryptMessage, 
+    decryptMessage,
+    encryptPrivateKeyWithPassword,
+    decryptPrivateKeyWithPassword
+} from './crypto.js';
 import { saveHistory, loadHistory, saveKeys, loadKeys } from './storage.js';
 import { initRouter, navigateTo } from './router.js';
 
@@ -67,7 +77,6 @@ async function handleAuth(isLogin) {
 
     try {
         if (isLogin) {
-
             // --- LOGIN LOGIC ---
             const res = await fetch(`${API_URL}/api/login`, {
                 method: 'POST',
@@ -77,39 +86,57 @@ async function handleAuth(isLogin) {
 
             if (!res.ok) throw new Error("Invalid username or password");
 
-            // Extract the access token from the server response
+            // Extract the secure session token and keys from the response payload
             const resData = await res.json();
             state.token = resData.access_token;
 
-            // Look for keys in local storage
-            const savedKeysJWK = loadKeys(username);
+            let savedKeysJWK = loadKeys(username);
+            
+            // Multi-device sync: if logging in from a new device/browser, rebuild the storage context
             if (!savedKeysJWK) {
-                throw new Error("Encryption keys not found on this device! Login rejected for security.");
+                console.log("📱 New device detected! Synchronizing encrypted keys from the secure cloud...");
+                
+                // Decrypt the server-provided backup private key using the client's local password context
+                const decryptedPrivJWK = await decryptPrivateKeyWithPassword(resData.encrypted_private_key, password);
+                
+                savedKeysJWK = {
+                    publicKey: resData.public_key,
+                    privateKey: decryptedPrivJWK
+                };
+                
+                // Persist locally to avoid redundant handshakes in the future
+                saveKeys(username, savedKeysJWK);
             }
 
-            // Restore keys
+            // Instantiate operational keys inside the isolated RAM state
             state.myKeys = {
                 publicKey: await importPublicKey(savedKeysJWK.publicKey),
                 privateKey: await importPrivateKey(savedKeysJWK.privateKey)
             };
             
-            // Pass the extracted token to the final setup step
-            finishLoginSetup(username, savedKeysJWK.publicKey, state.token);
+            finishLoginSetup(username, savedKeysJWK.publicKey);
 
         } else {
-
             // --- REGISTRATION LOGIC ---
-            // 1. Generate new key pair
+            // 1. Generate a brand new asymmetric cryptographic keypair
             state.myKeys = await generateKeyPair();
             
             const pubJWK = await exportPublicKey(state.myKeys.publicKey);
             const privJWK = await exportPrivateKey(state.myKeys.privateKey);
 
+            // Encrypt the private key locally via AES-GCM before letting it hit the network layer
+            const encPrivString = await encryptPrivateKeyWithPassword(privJWK, password);
+
             // 2. Send payload to server
             const res = await fetch(`${API_URL}/api/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password, public_key: pubJWK })
+                body: JSON.stringify({ 
+                    username, 
+                    password, 
+                    public_key: pubJWK,
+                    encrypted_private_key: encPrivString
+                })
             });
 
             if (!res.ok) throw new Error("Username is already taken");
@@ -132,7 +159,7 @@ function showAuthMessage(text, isError) {
 }
 
 // Runs after SUCCESSFUL login
-function finishLoginSetup(username, exportedPublicKeyJSON, token) {
+function finishLoginSetup(username, exportedPublicKeyJSON) {
     state.myUsername = username;
     state.chatHistory = loadHistory(state.myUsername);
     
@@ -141,7 +168,7 @@ function finishLoginSetup(username, exportedPublicKeyJSON, token) {
 
     // Establish WebSocket connection with cryptographic token authorization
     socket = connectToServer(
-        token,
+        state.token,
         // onOpen
         () => {
             updateStatus("Online", "text-green-500");
@@ -232,14 +259,14 @@ window.handleSendMessage = async function() {
         content: encryptedArray
     });
 
-    processMessage(state.currentTargetUser, "Вы", text, "outgoing");
+    processMessage(state.currentTargetUser, "You", text, "outgoing");
     DOM.messageInput.value = "";
 }
 
 // Event Listeners
 DOM.btnLogin.addEventListener('click', () => handleAuth(true));
 DOM.btnRegister.addEventListener('click', () => handleAuth(false));
-DOM.sendBtn.addEventListener('click', handleSendMessage); 
+DOM.sendBtn.addEventListener('click', window.handleSendMessage); 
 
 // Initialize the client-side router on startup
 initRouter(handleNavigation);

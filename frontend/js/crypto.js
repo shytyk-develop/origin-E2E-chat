@@ -79,33 +79,6 @@ export async function importPublicKey(jwkData) {
     return importedKey;
 }
 
-
-/* 
-Test run (Sandbox)
-async function runCryptoTest() {
-    console.log("--- CRYPTOGRAPHY TEST START ---");
-    
-    // 1. Generate keys
-    const bobKeys = await generateKeyPair();
-
-    // 2. User "A" writes a message and encrypts it with "B"'s public key
-    const originalText = "Hello";
-    console.log("Original:", originalText);
-    
-    const encryptedData = await encryptMessage(bobKeys.publicKey, originalText);
-    console.log("To the server, it looks like this:", new Uint8Array(encryptedData)); 
-
-    // 3. "B" receives message and decrypts it with private key
-    const decryptedText = await decryptMessage(bobKeys.privateKey, encryptedData);
-    
-    console.log("--- TEST END ---");
-}
-
-// Run the test when file loads
-runCryptoTest(); 
-*/
-
-
 /* 6. Export PRIVATE key into a JWK JSON */
 export async function exportPrivateKey(key) {
     const exportedKey = await window.crypto.subtle.exportKey(
@@ -129,3 +102,88 @@ export async function importPrivateKey(jwkData) {
     );
 }
 
+// =======================================================
+// NEW BLOCK: SYMMETRIC PASSWORD-BASED PRIVATE KEY ENCRYPTION
+// =======================================================
+
+/**
+ * Derives a secure 256-bit AES key from a plain text password using PBKDF2
+ */
+async function derivePasswordKey(password, saltBytes) {
+    const encoder = new TextEncoder();
+    const passwordBuffer = encoder.encode(password);
+
+    const baseKey = await window.crypto.subtle.importKey(
+        "raw",
+        passwordBuffer,
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+    );
+
+    return await window.crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: saltBytes,
+            iterations: 100000, 
+            hash: "SHA-256"
+        },
+        baseKey,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
+}
+
+/**
+ * Encrypts the client's JWK private key using AES-GCM derived from their password
+ */
+export async function encryptPrivateKeyWithPassword(privateKeyJWK, password) {
+    const encoder = new TextEncoder();
+    const jwkString = JSON.stringify(privateKeyJWK);
+    const jwkBytes = encoder.encode(jwkString);
+
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+    const aesKey = await derivePasswordKey(password, salt);
+
+    const encryptedBuffer = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        aesKey,
+        jwkBytes
+    );
+
+    const bufBytes = new Uint8Array(encryptedBuffer);
+    const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+    const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+    const cryptHex = Array.from(bufBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    return `${saltHex}:${ivHex}:${cryptHex}`;
+}
+
+/**
+ * Decrypts a hex-encoded cipher string back into a functional JWK private key object
+ */
+export async function decryptPrivateKeyWithPassword(encryptedString, password) {
+    const [saltHex, ivHex, cryptHex] = encryptedString.split(':');
+    
+    const salt = new Uint8Array(saltHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    const cryptBytes = new Uint8Array(cryptHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+
+    const aesKey = await derivePasswordKey(password, salt);
+
+    try {
+        const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: iv },
+            aesKey,
+            cryptBytes
+        );
+        const decoder = new TextDecoder();
+        const jwkString = decoder.decode(decryptedBuffer);
+        return JSON.parse(jwkString);
+    } catch (e) {
+        throw new Error("Failed to decrypt private key. Wrong password or corrupted keys.");
+    }
+}
