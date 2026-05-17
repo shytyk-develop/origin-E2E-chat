@@ -1,13 +1,16 @@
 // frontend/js/network.js
 
-/* Establishes a secure WebSocket connection using a JWT token via query parameters */
-export function connectToServer(token, onOpen, onMessage, onClose) {
-    const WS_URL = `wss://originhub.onrender.com/ws?token=${token}`;
+/* Establishes a secure WebSocket connection. */
+export function connectToServer(onOpen, onMessage, onClose) {
+    const WS_URL = "wss://originhub.onrender.com/ws";
+    
+    // For local development testing
+    // const WS_URL = "ws://localhost:10000/ws";
 
     const socket = new WebSocket(WS_URL);
     
     socket.onopen = () => {
-        console.log("WebSocket connected securely!");
+        console.log("WebSocket connected securely via HttpOnly Cookies! 🎉");
         if (onOpen) onOpen();
     };
     
@@ -16,7 +19,7 @@ export function connectToServer(token, onOpen, onMessage, onClose) {
     };
     
     socket.onclose = (event) => {
-        print(`WebSocket closed: Code ${event.code}, Reason: ${event.reason}`);
+        console.log(`WebSocket closed: Code ${event.code}, Reason: ${event.reason}`);
         if (onClose) onClose();
     };
     

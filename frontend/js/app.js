@@ -22,7 +22,6 @@ let socket = null;
 let state = {
     myUsername: null,
     myKeys: null,
-    token: null,
     currentTargetUser: null,
     usersDirectory: {},
     chatHistory: {}
@@ -81,14 +80,14 @@ async function handleAuth(isLogin) {
             const res = await fetch(`${API_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username, password }),
+                credentials: "include" // Instructs the browser to drop and store the HttpOnly cookie
             });
 
             if (!res.ok) throw new Error("Invalid username or password");
 
-            // Extract the secure session token and keys from the response payload
+            // Extract the synced key data (token collection is managed entirely by the browser)
             const resData = await res.json();
-            state.token = resData.access_token;
 
             let savedKeysJWK = loadKeys(username);
             
@@ -136,7 +135,8 @@ async function handleAuth(isLogin) {
                     password, 
                     public_key: pubJWK,
                     encrypted_private_key: encPrivString
-                })
+                }),
+                credentials: "include" // Allow cookie transmission cross-origin if required
             });
 
             if (!res.ok) throw new Error("Username is already taken");
@@ -166,9 +166,8 @@ function finishLoginSetup(username, exportedPublicKeyJSON) {
     // Clean redirect via SPA
     navigateTo('/chat', handleNavigation);
 
-    // Establish WebSocket connection with cryptographic token authorization
+    // Establish WebSocket connection — credentials/cookies are bound implicitly by the browser context
     socket = connectToServer(
-        state.token,
         // onOpen
         () => {
             updateStatus("Online", "text-green-500");
