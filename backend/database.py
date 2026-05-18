@@ -126,6 +126,26 @@ def init_db():
             ON chat_history (client_message_id)
             WHERE client_message_id IS NOT NULL;
         ''')
+
+        cursor.execute('''
+            ALTER TABLE chat_history
+            ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;
+        ''')
+
+        cursor.execute('''
+            ALTER TABLE chat_history
+            ADD COLUMN IF NOT EXISTS read_at TIMESTAMP;
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS conversation_read_state (
+                username VARCHAR(255) NOT NULL,
+                partner VARCHAR(255) NOT NULL,
+                last_read_message_id INTEGER NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (username, partner)
+            )
+        ''')
         
         conn.commit()
     finally:
@@ -246,6 +266,108 @@ def conversation_exists_db(user: str, partner: str) -> bool:
     finally:
         release_connection(conn)
 
+def get_unread_count_db(username: str, partner: str) -> int:
+    """Count incoming messages from partner not yet marked read."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT COUNT(*)
+            FROM chat_history ch
+            LEFT JOIN conversation_read_state crs
+              ON crs.username = %s AND crs.partner = %s
+            WHERE ch.receiver = %s
+              AND ch.sender = %s
+              AND ch.id > COALESCE(crs.last_read_message_id, 0)
+        ''', (username, partner, username, partner))
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        release_connection(conn)
+
+def get_unread_counts_db(username: str) -> dict:
+    """Returns {partner: unread_count} for all conversations."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            WITH partners AS (
+                SELECT DISTINCT
+                    CASE
+                        WHEN sender = %s THEN receiver
+                        ELSE sender
+                    END AS partner
+                FROM chat_history
+                WHERE sender = %s OR receiver = %s
+            )
+            SELECT
+                p.partner,
+                COUNT(ch.id)::int
+            FROM partners p
+            LEFT JOIN conversation_read_state crs
+              ON crs.username = %s AND crs.partner = p.partner
+            LEFT JOIN chat_history ch
+              ON ch.sender = p.partner
+             AND ch.receiver = %s
+             AND ch.id > COALESCE(crs.last_read_message_id, 0)
+            GROUP BY p.partner
+        ''', (username, username, username, username, username))
+        return {row[0]: row[1] for row in cursor.fetchall()}
+    finally:
+        release_connection(conn)
+
+def mark_conversation_read_db(username: str, partner: str, up_to_message_id: int) -> int:
+    """Marks all incoming messages from partner up to message id as read."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO conversation_read_state (username, partner, last_read_message_id, updated_at)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (username, partner)
+            DO UPDATE SET
+                last_read_message_id = GREATEST(
+                    conversation_read_state.last_read_message_id,
+                    EXCLUDED.last_read_message_id
+                ),
+                updated_at = CURRENT_TIMESTAMP
+        ''', (username, partner, up_to_message_id))
+
+        cursor.execute('''
+            UPDATE chat_history
+            SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+            WHERE sender = %s
+              AND receiver = %s
+              AND id <= %s
+              AND read_at IS NULL
+        ''', (partner, username, up_to_message_id))
+        updated = cursor.rowcount
+        conn.commit()
+        return updated
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        release_connection(conn)
+
+def mark_message_delivered_db(message_id: int) -> bool:
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            UPDATE chat_history
+            SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP)
+            WHERE id = %s
+        ''', (message_id,))
+        updated = cursor.rowcount > 0
+        conn.commit()
+        return updated
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        release_connection(conn)
+
 def get_chat_partners_db(username: str, limit: int = 50) -> list:
     """Returns sidebar contacts: users with at least one message, newest first."""
     conn = get_connection()
@@ -269,18 +391,28 @@ def get_chat_partners_db(username: str, limit: int = 50) -> list:
                 p.partner,
                 u.public_key,
                 p.last_message_at,
-                p.last_message_id
+                p.last_message_id,
+                COALESCE((
+                    SELECT COUNT(ch.id)::int
+                    FROM chat_history ch
+                    LEFT JOIN conversation_read_state crs
+                      ON crs.username = %s AND crs.partner = p.partner
+                    WHERE ch.sender = p.partner
+                      AND ch.receiver = %s
+                      AND ch.id > COALESCE(crs.last_read_message_id, 0)
+                ), 0) AS unread_count
             FROM partners p
             INNER JOIN users u ON u.username = p.partner
             ORDER BY p.last_message_at DESC NULLS LAST, p.last_message_id DESC
             LIMIT %s
-        ''', (username, username, username, safe_limit))
+        ''', (username, username, username, username, username, safe_limit))
         rows = cursor.fetchall()
         return [{
             "username": row[0],
             "public_key": _parse_public_key(row[1]),
             "last_message_at": row[2].isoformat() if row[2] else None,
             "last_message_id": row[3],
+            "unread_count": row[4] or 0,
         } for row in rows]
     finally:
         release_connection(conn)

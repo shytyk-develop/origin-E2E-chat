@@ -2,7 +2,7 @@
 from fastapi import WebSocket
 import json
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set
 
 import database
 
@@ -11,26 +11,32 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[WebSocket, Dict[str, Any]] = {}
         self.username_to_websocket: Dict[str, WebSocket] = {}
+        self.online_usernames: Set[str] = set()
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections[websocket] = {"username": None, "public_key": None}
 
-    def disconnect(self, websocket: WebSocket):
+    async def disconnect(self, websocket: WebSocket):
         session = self.active_connections.pop(websocket, None)
-        if session and session.get("username"):
-            mapped = self.username_to_websocket.get(session["username"])
+        username = session.get("username") if session else None
+        if username:
+            mapped = self.username_to_websocket.get(username)
             if mapped is websocket:
-                del self.username_to_websocket[session["username"]]
+                del self.username_to_websocket[username]
+                self.online_usernames.discard(username)
+                await self.broadcast_presence(username, False)
 
     def get_websocket_for_user(self, username: str) -> Optional[WebSocket]:
         return self.username_to_websocket.get(username)
 
+    def _session_username(self, websocket: WebSocket) -> Optional[str]:
+        return self.active_connections.get(websocket, {}).get("username")
+
     async def register_user(self, websocket: WebSocket, username: str, public_key: str):
-        """Registers a user upon successful handshake authentication."""
         previous = self.username_to_websocket.get(username)
         if previous and previous is not websocket:
-            self.disconnect(previous)
+            await self.disconnect(previous)
             try:
                 await previous.close(code=1000, reason="Replaced by a newer session")
             except Exception:
@@ -39,6 +45,13 @@ class ConnectionManager:
         self.active_connections[websocket]["username"] = username
         self.active_connections[websocket]["public_key"] = public_key
         self.username_to_websocket[username] = websocket
+        self.online_usernames.add(username)
+
+        await self._send_json(websocket, {
+            "type": "presence_sync",
+            "online": sorted(self.online_usernames),
+        })
+        await self.broadcast_presence(username, True, exclude=websocket)
 
         offline_msgs = await asyncio.to_thread(
             database.get_and_delete_offline_messages, username
@@ -56,6 +69,20 @@ class ConnectionManager:
 
         return True
 
+    async def broadcast_presence(self, username: str, is_online: bool, exclude: Optional[WebSocket] = None):
+        payload = {
+            "type": "presence",
+            "username": username,
+            "online": is_online,
+        }
+        for ws in list(self.active_connections.keys()):
+            if ws is exclude:
+                continue
+            try:
+                await self._send_json(ws, payload)
+            except Exception:
+                await self.disconnect(ws)
+
     async def broadcast_users_list(self):
         users_from_db = [
             {
@@ -71,10 +98,79 @@ class ConnectionManager:
             try:
                 await ws.send_text(message_json)
             except Exception:
-                self.disconnect(ws)
+                await self.disconnect(ws)
 
     async def _send_json(self, websocket: WebSocket, payload: dict):
         await websocket.send_text(json.dumps(payload))
+
+    async def _notify_user(self, username: str, payload: dict):
+        ws = self.get_websocket_for_user(username)
+        if not ws:
+            return False
+        try:
+            await self._send_json(ws, payload)
+            return True
+        except Exception:
+            await self.disconnect(ws)
+            return False
+
+    async def handle_typing(self, data: dict, websocket: WebSocket):
+        sender = self._session_username(websocket)
+        target = data.get("to")
+        if not sender or not target:
+            return
+
+        await self._notify_user(target, {
+            "type": "typing",
+            "from": sender,
+            "is_typing": bool(data.get("is_typing", True)),
+        })
+
+    async def handle_delivery_ack(self, data: dict, websocket: WebSocket):
+        recipient = self._session_username(websocket)
+        message_id = data.get("message_id")
+        client_message_id = data.get("client_message_id")
+        sender = data.get("from")
+        if not recipient or not sender:
+            return
+
+        if message_id:
+            await asyncio.to_thread(database.mark_message_delivered_db, int(message_id))
+
+        await self._notify_user(sender, {
+            "type": "message_status",
+            "status": "delivered",
+            "message_id": message_id,
+            "client_message_id": client_message_id,
+            "partner": recipient,
+        })
+
+    async def handle_read_receipt(self, data: dict, websocket: WebSocket):
+        reader = self._session_username(websocket)
+        partner = data.get("partner")
+        up_to_message_id = data.get("up_to_message_id")
+        if not reader or not partner or not up_to_message_id:
+            return
+
+        await asyncio.to_thread(
+            database.mark_conversation_read_db,
+            reader,
+            partner,
+            int(up_to_message_id),
+        )
+
+        await self._notify_user(partner, {
+            "type": "message_status",
+            "status": "read",
+            "partner": reader,
+            "up_to_message_id": up_to_message_id,
+        })
+
+        await self._send_json(websocket, {
+            "type": "unread_sync",
+            "partner": partner,
+            "unread_count": 0,
+        })
 
     async def send_personal_message(self, data: dict, sender_websocket: WebSocket):
         """Push ciphertext to the recipient first, persist to PostgreSQL in a worker thread."""
@@ -113,7 +209,7 @@ class ConnectionManager:
                     })
                 await self._send_json(target_websocket, packet)
             except Exception:
-                self.disconnect(target_websocket)
+                await self.disconnect(target_websocket)
                 target_websocket = None
 
         saved_message = await asyncio.to_thread(
@@ -137,8 +233,16 @@ class ConnectionManager:
                     "id": saved_message["id"],
                     "timestamp": saved_message["timestamp"],
                 })
+                unread_count = await asyncio.to_thread(
+                    database.get_unread_count_db, target_username, sender_username
+                )
+                await self._send_json(target_websocket, {
+                    "type": "unread_sync",
+                    "partner": sender_username,
+                    "unread_count": unread_count,
+                })
             except Exception:
-                self.disconnect(target_websocket)
+                await self.disconnect(target_websocket)
                 target_websocket = None
 
         if not target_websocket:
@@ -159,6 +263,23 @@ class ConnectionManager:
             "timestamp": saved_message["timestamp"],
         }
         await self._send_json(sender_websocket, ack_packet)
+
+        await self._send_json(sender_websocket, {
+            "type": "message_status",
+            "status": "sent",
+            "message_id": saved_message["id"],
+            "client_message_id": client_message_id,
+        })
+
+        if target_websocket:
+            await self._send_json(sender_websocket, {
+                "type": "message_status",
+                "status": "delivered",
+                "message_id": saved_message["id"],
+                "client_message_id": client_message_id,
+                "partner": target_username,
+            })
+            await asyncio.to_thread(database.mark_message_delivered_db, saved_message["id"])
 
         if is_new_chat:
             partner_data = await asyncio.to_thread(database.get_user_db, target_username)

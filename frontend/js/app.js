@@ -33,9 +33,12 @@ import {
     setPreferenceControls,
     clearUsersList,
     updateMessageIdentity,
+    updateMessageStatus,
     removeMessageElement,
-    setMessageActionHandlers
+    setMessageActionHandlers,
+    setRealtimeContext
 } from './ui.js';
+import { createRealtimeController } from './realtime.js';
 import { connectToServer, sendPacket } from './network.js';
 import { 
     generateKeyPair, 
@@ -76,6 +79,7 @@ import {
 let socketConnection = null;
 let routerReady = false;
 let contactSearchTimer = null;
+let realtime = null;
 let state = {
     myUsername: null,
     myKeys: null,
@@ -84,8 +88,30 @@ let state = {
     usersDirectory: {},
     sidebarChats: [],
     chatHistory: {},
+    onlineUsers: new Set(),
+    unreadCounts: {},
+    typingUsers: new Set(),
     preferences: loadPreferences()
 };
+
+function syncRealtimeUi() {
+    setRealtimeContext({
+        onlineUsers: state.onlineUsers,
+        unreadCounts: state.unreadCounts,
+        typingUsers: state.typingUsers,
+    });
+}
+
+function ensureRealtime() {
+    if (realtime) return realtime;
+    realtime = createRealtimeController({
+        getSocket,
+        sendPacket,
+        getState: () => state,
+        onUiSync: syncRealtimeUi,
+    });
+    return realtime;
+}
 
 function getSocket() {
     return socketConnection?.current || null;
@@ -102,6 +128,7 @@ function renderSidebar() {
         onContactSelected,
         state.currentTargetUser
     );
+    syncRealtimeUi();
 }
 
 function upsertSidebarChat(partner, extras = {}) {
@@ -134,6 +161,61 @@ function handleNewChatEvent(data) {
         public_key: partner.public_key,
         last_message_at: data.last_message_at || new Date().toISOString(),
     });
+}
+
+function handleMessageStatusEvent(data) {
+    const { status, client_message_id, message_id, partner, up_to_message_id } = data;
+
+    if (status === 'delivered' || status === 'read') {
+        updateOutgoingStatus(client_message_id, message_id, status, partner);
+    }
+
+    if (status === 'read' && partner) {
+        const messages = state.chatHistory[partner] || [];
+        messages.forEach(msg => {
+            if (msg.type === 'outgoing' && msg.id && up_to_message_id && msg.id <= up_to_message_id) {
+                msg.status = 'read';
+                updateMessageStatus(msg.clientMessageId, msg.id, 'read');
+            }
+        });
+        saveHistory(state.myUsername, state.chatHistory);
+    }
+}
+
+function updateOutgoingStatus(clientMessageId, messageId, status, partnerHint = null) {
+    let message = null;
+    const partners = partnerHint ? [partnerHint] : Object.keys(state.chatHistory);
+
+    for (const partner of partners) {
+        const found = (state.chatHistory[partner] || []).find(item =>
+            (clientMessageId && item.clientMessageId === clientMessageId) ||
+            (messageId && String(item.id) === String(messageId))
+        );
+        if (found) {
+            message = found;
+            break;
+        }
+    }
+
+    if (!message) return;
+
+    message.status = status;
+    message.pending = false;
+    saveHistory(state.myUsername, state.chatHistory);
+    updateMessageStatus(message.clientMessageId, message.id, status);
+}
+
+function markActiveChatRead() {
+    const partner = state.currentTargetUser;
+    if (!partner) return;
+
+    ensureRealtime().clearUnread(partner);
+
+    const messages = state.chatHistory[partner] || [];
+    const lastWithId = [...messages].reverse().find(msg => msg.id);
+    if (lastWithId?.id) {
+        ensureRealtime().sendReadReceipt(partner, lastWithId.id);
+    }
 }
 
 applyPreferences(state.preferences);
@@ -248,6 +330,9 @@ async function loadSidebarChats() {
         state.sidebarChats = chats;
         chats.forEach(chat => {
             state.usersDirectory[chat.username] = chat.public_key;
+            if (chat.unread_count != null) {
+                state.unreadCounts[chat.username] = chat.unread_count;
+            }
         });
         renderSidebar();
     } catch (err) {
@@ -264,6 +349,7 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
     ensureRouter();
     navigateTo(targetPath, handleNavigation);
     loadSidebarChats();
+    ensureRealtime();
 
     if (socketConnection) {
         socketConnection.close();
@@ -286,6 +372,15 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                     state.usersDirectory[u.username] = u.public_key;
                 });
             }
+            else if (data.type === "presence_sync") {
+                ensureRealtime().setOnlineUsers(data.online || []);
+            }
+            else if (data.type === "presence") {
+                ensureRealtime().setPresence(data.username, Boolean(data.online));
+            }
+            else if (data.type === "typing") {
+                ensureRealtime().setTyping(data.from, Boolean(data.is_typing));
+            }
             else if (data.type === "new_chat") {
                 handleNewChatEvent(data);
             }
@@ -295,6 +390,12 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 upsertSidebarChat(data.from, {
                     last_message_at: data.timestamp || new Date().toISOString(),
                 });
+
+                const isActiveChat = state.currentTargetUser === data.from;
+                if (!isActiveChat) {
+                    ensureRealtime().incrementUnread(data.from);
+                }
+
                 processMessage(data.from, {
                     id: data.id,
                     clientMessageId: data.client_message_id,
@@ -303,12 +404,30 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                     type: "incoming",
                     timestamp: data.timestamp || Date.now()
                 });
+
+                if (data.id) {
+                    ensureRealtime().sendDeliveryAck(data.from, data.id, data.client_message_id);
+                }
+                if (isActiveChat) {
+                    markActiveChatRead();
+                }
             }
             else if (data.type === "message_sync") {
                 markMessageSynced(data.client_message_id, data.id, data.timestamp);
+                if (state.currentTargetUser === data.from && data.id) {
+                    ensureRealtime().sendDeliveryAck(data.from, data.id, data.client_message_id);
+                    markActiveChatRead();
+                }
             }
             else if (data.type === "message_ack") {
                 markMessageSynced(data.client_message_id, data.id, data.timestamp);
+                updateOutgoingStatus(data.client_message_id, data.id, 'sent');
+            }
+            else if (data.type === "message_status") {
+                handleMessageStatusEvent(data);
+            }
+            else if (data.type === "unread_sync") {
+                ensureRealtime().setUnread(data.partner, data.unread_count);
             }
         },
         (event, closedByUser) => {
@@ -339,7 +458,8 @@ function processMessage(chatPartner, messageInput) {
         text: messageInput.text,
         type: messageInput.type,
         timestamp: messageInput.timestamp || Date.now(),
-        pending: Boolean(messageInput.pending)
+        pending: Boolean(messageInput.pending),
+        status: messageInput.status || (messageInput.pending ? 'sending' : messageInput.type === 'outgoing' ? 'sent' : undefined),
     };
 
     state.chatHistory[chatPartner].push(message);
@@ -363,6 +483,7 @@ function markMessageSynced(clientMessageId, messageId, timestamp) {
     message.id = messageId;
     message.timestamp = timestamp || message.timestamp;
     message.pending = false;
+    message.status = message.status || 'sent';
     saveHistory(state.myUsername, state.chatHistory);
     updateMessageIdentity(clientMessageId, messageId, timestamp);
 }
@@ -440,6 +561,8 @@ async function switchChat(username) {
     setComposerValue(loadDraft(state.myUsername, username));
     setDraftStatus(getComposerValue() ? "Draft restored locally" : "Cipher Stack: AES-GCM-256 + RSA-OAEP-2048");
     saveHistory(state.myUsername, state.chatHistory);
+    markActiveChatRead();
+    syncRealtimeUi();
 }
 
 async function handleSendMessage() {
@@ -499,7 +622,8 @@ async function handleSendMessage() {
             text,
             type: "outgoing",
             timestamp: Date.now(),
-            pending: true
+            pending: true,
+            status: 'sending',
         });
         clearDraft(state.myUsername, state.currentTargetUser);
         clearComposer();
@@ -528,6 +652,9 @@ DOM.messageInput.addEventListener('input', () => {
     autoResizeComposer();
     updateComposerMeta(getComposerValue());
     persistCurrentDraft();
+    if (state.currentTargetUser && getComposerValue().trim()) {
+        ensureRealtime().notifyTyping(state.currentTargetUser);
+    }
 });
 
 DOM.messageInput.addEventListener('keydown', (event) => {
@@ -823,6 +950,11 @@ function handleLogout() {
     state.usersDirectory = {};
     state.sidebarChats = [];
     state.chatHistory = {};
+    state.onlineUsers = new Set();
+    state.unreadCounts = {};
+    state.typingUsers = new Set();
+    realtime?.reset();
+    realtime = null;
 
     DOM.usernameInput.value = "";
     DOM.passwordInput.value = "";

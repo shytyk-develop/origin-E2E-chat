@@ -14,6 +14,7 @@ export const DOM = {
     sendBtn: document.getElementById('sendBtn'),
     usersListDiv: document.getElementById('usersList'),
     chatWithTitle: document.getElementById('chatWithTitle'),
+    chatSubtitle: document.getElementById('chatSubtitle'),
     chatWelcome: document.getElementById('chat-welcome'),
 
     focusContactsBtn: document.getElementById('uiFocusContactsBtn'),
@@ -79,20 +80,54 @@ const contactsState = {
     onUserSelect: null
 };
 
+const realtimeContext = {
+    onlineUsers: new Set(),
+    unreadCounts: {},
+    typingUsers: new Set(),
+};
+
+const PRESENCE_ONLINE =
+    'h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_2px_rgba(52,211,153,0.35)]';
+const PRESENCE_OFFLINE =
+    'h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.35)]';
+const UNREAD_BADGE =
+    'flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500 px-1.5 text-[10px] font-bold leading-none text-white';
+
 const COMPOSER_DEFAULT_META = 'Cipher Stack: AES-GCM-256 + RSA-OAEP-2048';
 const MAX_MESSAGE_LENGTH = 2000;
 const messageActionHandlers = {
     onDeleteMessage: null
 };
 
+export function setRealtimeContext(ctx = {}) {
+    if (ctx.onlineUsers) {
+        realtimeContext.onlineUsers = ctx.onlineUsers instanceof Set
+            ? ctx.onlineUsers
+            : new Set(ctx.onlineUsers);
+    }
+    if (ctx.unreadCounts) {
+        realtimeContext.unreadCounts = { ...ctx.unreadCounts };
+    }
+    if (ctx.typingUsers) {
+        realtimeContext.typingUsers = ctx.typingUsers instanceof Set
+            ? ctx.typingUsers
+            : new Set(ctx.typingUsers);
+    }
+    refreshContactIndicators();
+    refreshChatHeaderSubtitle();
+}
+
 export function updateStatus(status, colorClass) {
     DOM.statusSpan.textContent = status;
     const statusIntent = `${status} ${colorClass}`.toLowerCase();
     const isOnline = statusIntent.includes('online') ||
         statusIntent.includes('green') ||
-        statusIntent.includes('emerald');
+        statusIntent.includes('emerald') ||
+        statusIntent.includes('yellow');
 
-    DOM.statusSpan.className = isOnline ? 'status-online' : 'status-offline';
+    DOM.statusSpan.className = isOnline
+        ? 'rounded-full px-2 py-0.5 text-xs font-medium text-emerald-400'
+        : 'rounded-full px-2 py-0.5 text-xs font-medium text-red-400';
 }
 
 export function setSidebarChats(chats, myUsername, onUserSelect, activeUsername = contactsState.activeUsername) {
@@ -138,11 +173,16 @@ export function activateChatPanel(username) {
     DOM.sendBtn.disabled = false;
     setChatToolsEnabled(true);
     setActiveContact(username);
+    refreshChatHeaderSubtitle();
     focusComposer();
 }
 
 export function resetChatPanel() {
     DOM.chatWithTitle.textContent = 'Select a secure channel';
+    if (DOM.chatSubtitle) {
+        DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
+        DOM.chatSubtitle.className = 'header-sub text-sm text-zinc-400';
+    }
     DOM.messagesDiv.innerHTML = '';
     DOM.messageInput.value = '';
     DOM.messageInput.disabled = true;
@@ -181,9 +221,22 @@ export function appendMessage(messageOrSender, text, type, timestamp = Date.now(
     textElement.className = 'message-text';
     textElement.textContent = message.text;
 
+    const footerRow = document.createElement('div');
+    footerRow.className = 'mt-1 flex items-center justify-end gap-1';
+
     const timeElement = document.createElement('div');
-    timeElement.className = 'message-time';
+    timeElement.className = 'message-time text-[10px] text-zinc-500';
     timeElement.textContent = formatMessageTime(new Date(message.timestamp || Date.now()));
+    footerRow.append(timeElement);
+
+    if (message.type === 'outgoing') {
+        const statusElement = document.createElement('span');
+        statusElement.dataset.messageStatus = 'true';
+        statusElement.className = formatMessageStatusClasses(message.status, message.pending);
+        statusElement.textContent = formatMessageStatusIcon(message.status, message.pending);
+        statusElement.title = formatMessageStatusTitle(message.status, message.pending);
+        footerRow.append(statusElement);
+    }
 
     const actionsElement = document.createElement('div');
     actionsElement.className = 'message-actions';
@@ -200,7 +253,7 @@ export function appendMessage(messageOrSender, text, type, timestamp = Date.now(
     });
 
     actionsElement.append(deleteButton);
-    msgElement.append(senderElement, textElement, timeElement, actionsElement);
+    msgElement.append(senderElement, textElement, footerRow, actionsElement);
     DOM.messagesDiv.appendChild(msgElement);
     scrollMessagesToBottom();
 }
@@ -222,6 +275,27 @@ export function updateMessageIdentity(clientMessageId, id, timestamp) {
     if (timeElement && timestamp) {
         timeElement.textContent = formatMessageTime(new Date(timestamp));
     }
+
+    updateMessageStatus(clientMessageId, id, 'sent');
+}
+
+export function updateMessageStatus(clientMessageId, messageId, status) {
+    const selector = clientMessageId
+        ? `[data-client-message-id="${CSS.escape(clientMessageId)}"]`
+        : messageId
+            ? `[data-message-id="${CSS.escape(String(messageId))}"]`
+            : null;
+    if (!selector) return;
+
+    const msgElement = DOM.messagesDiv.querySelector(selector);
+    if (!msgElement) return;
+
+    const statusElement = msgElement.querySelector('[data-message-status]');
+    if (!statusElement) return;
+
+    statusElement.textContent = formatMessageStatusIcon(status, false);
+    statusElement.title = formatMessageStatusTitle(status, false);
+    statusElement.className = formatMessageStatusClasses(status, false);
 }
 
 export function removeMessageElement(messageId) {
@@ -434,18 +508,33 @@ function renderFilteredUsers() {
         name.textContent = user.username;
 
         const subtitle = document.createElement('div');
-        subtitle.className = 'contact-subtitle';
-        subtitle.textContent = user.last_message_at
-            ? formatSidebarTime(user.last_message_at)
-            : 'Secure channel';
+        subtitle.className = 'contact-subtitle text-xs text-zinc-500';
+        subtitle.dataset.contactSubtitle = 'true';
+        if (realtimeContext.typingUsers.has(user.username)) {
+            subtitle.innerHTML = buildTypingDotsHtml();
+        } else {
+            subtitle.textContent = user.last_message_at
+                ? formatSidebarTime(user.last_message_at)
+                : 'Secure channel';
+        }
 
         meta.append(name, subtitle);
 
         const presence = document.createElement('div');
-        presence.className = 'contact-presence';
+        presence.className = `contact-presence ${getPresenceClasses(user.username)}`;
+        presence.dataset.presenceDot = 'true';
         presence.setAttribute('aria-hidden', 'true');
 
         btn.append(avatar, meta, presence);
+
+        const unreadCount = realtimeContext.unreadCounts[user.username] ?? user.unread_count ?? 0;
+        if (unreadCount > 0 && user.username !== contactsState.activeUsername) {
+            const badge = document.createElement('span');
+            badge.dataset.unreadBadge = 'true';
+            badge.className = UNREAD_BADGE;
+            badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+            btn.append(badge);
+        }
         btn.onclick = () => contactsState.onUserSelect?.(user.username);
         DOM.usersListDiv.appendChild(btn);
     });
@@ -502,4 +591,98 @@ function formatMessageTime(date) {
         hour: '2-digit',
         minute: '2-digit'
     });
+}
+
+function getPresenceClasses(username) {
+    return realtimeContext.onlineUsers.has(username) ? PRESENCE_ONLINE : PRESENCE_OFFLINE;
+}
+
+function buildTypingDotsHtml() {
+    return `<span class="inline-flex items-center gap-0.5 text-xs text-zinc-400" aria-label="Typing">
+        <span class="h-1 w-1 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.2s]"></span>
+        <span class="h-1 w-1 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.1s]"></span>
+        <span class="h-1 w-1 animate-bounce rounded-full bg-zinc-400"></span>
+    </span>`;
+}
+
+function refreshContactIndicators() {
+    DOM.usersListDiv.querySelectorAll('.contact-row').forEach(row => {
+        const username = row.dataset.username;
+        if (!username) return;
+
+        const presence = row.querySelector('[data-presence-dot]');
+        if (presence) {
+            presence.className = `contact-presence ${getPresenceClasses(username)}`;
+        }
+
+        const subtitle = row.querySelector('[data-contact-subtitle]');
+        if (subtitle) {
+            if (realtimeContext.typingUsers.has(username)) {
+                subtitle.innerHTML = buildTypingDotsHtml();
+            }
+        }
+
+        let badge = row.querySelector('[data-unread-badge]');
+        const unread = realtimeContext.unreadCounts[username] ?? 0;
+        const showBadge = unread > 0 && username !== contactsState.activeUsername;
+
+        if (showBadge) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.dataset.unreadBadge = 'true';
+                row.append(badge);
+            }
+            badge.className = UNREAD_BADGE;
+            badge.textContent = unread > 99 ? '99+' : String(unread);
+        } else if (badge) {
+            badge.remove();
+        }
+    });
+}
+
+function refreshChatHeaderSubtitle() {
+    if (!DOM.chatSubtitle) return;
+
+    const partner = contactsState.activeUsername;
+    if (!partner) {
+        DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
+        DOM.chatSubtitle.className = 'header-sub text-sm text-zinc-400';
+        return;
+    }
+
+    if (realtimeContext.typingUsers.has(partner)) {
+        DOM.chatSubtitle.innerHTML = `<span class="inline-flex items-center gap-2 text-sm text-zinc-400">
+            <span>typing</span>${buildTypingDotsHtml()}
+        </span>`;
+        return;
+    }
+
+    const online = realtimeContext.onlineUsers.has(partner);
+    DOM.chatSubtitle.innerHTML = online
+        ? '<span class="text-sm font-medium text-emerald-400">Online</span>'
+        : '<span class="text-sm font-medium text-red-400">Offline</span>';
+}
+
+function formatMessageStatusIcon(status, pending) {
+    if (pending || status === 'sending') return '◔';
+    if (status === 'read') return '✓✓';
+    if (status === 'delivered') return '✓✓';
+    if (status === 'sent') return '✓';
+    return '◔';
+}
+
+function formatMessageStatusTitle(status, pending) {
+    if (pending || status === 'sending') return 'Sending';
+    if (status === 'read') return 'Read';
+    if (status === 'delivered') return 'Delivered';
+    if (status === 'sent') return 'Sent';
+    return 'Sending';
+}
+
+function formatMessageStatusClasses(status, pending) {
+    const base = 'text-[11px] leading-none';
+    if (pending || status === 'sending') return `${base} text-zinc-500`;
+    if (status === 'read') return `${base} text-emerald-400`;
+    if (status === 'delivered') return `${base} text-zinc-400`;
+    return `${base} text-zinc-500`;
 }

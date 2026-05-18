@@ -197,6 +197,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 
             elif data["type"] == "message":
                 await manager.send_personal_message(data, websocket)
+
+            elif data["type"] == "typing":
+                await manager.handle_typing(data, websocket)
+
+            elif data["type"] == "delivery_ack":
+                await manager.handle_delivery_ack(data, websocket)
+
+            elif data["type"] == "read_receipt":
+                await manager.handle_read_receipt(data, websocket)
             
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        await manager.disconnect(websocket)
