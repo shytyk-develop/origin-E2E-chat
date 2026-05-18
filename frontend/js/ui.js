@@ -200,68 +200,125 @@ export function resetChatPanel() {
     setActiveContact(null);
 }
 
-export function appendMessage(messageOrSender, text, type, timestamp = Date.now()) {
+export function renderMessagesList(messages) {
+    DOM.messagesDiv.innerHTML = '';
+    if (!Array.isArray(messages) || !messages.length) return;
+
+    messages.forEach((message, index) => {
+        const prev = index > 0 ? messages[index - 1] : null;
+        DOM.messagesDiv.appendChild(buildMessageElement(message, prev));
+    });
+    scrollMessagesToBottom();
+}
+
+export function appendMessage(messageOrSender, text, type, timestamp = Date.now(), previousMessage = null) {
     const message = typeof messageOrSender === 'object'
         ? messageOrSender
         : { sender: messageOrSender, text, type, timestamp };
 
-    const msgElement = document.createElement('div');
-    msgElement.className = message.type === 'outgoing'
-        ? 'message-bubble message-outgoing'
-        : 'message-bubble message-incoming';
-    if (message.pending) {
-        msgElement.classList.add('is-pending');
-    }
-    if (message.id) {
-        msgElement.dataset.messageId = String(message.id);
-    }
-    if (message.clientMessageId) {
-        msgElement.dataset.clientMessageId = message.clientMessageId;
+    if (!previousMessage) {
+        const rows = DOM.messagesDiv.querySelectorAll('.message-row');
+        const lastRow = rows[rows.length - 1];
+        if (lastRow) {
+            previousMessage = {
+                type: lastRow.dataset.messageType,
+                sender: lastRow.dataset.messageSender || '',
+            };
+        }
     }
 
-    const senderElement = document.createElement('div');
-    senderElement.className = 'message-sender';
-    senderElement.textContent = message.sender;
+    DOM.messagesDiv.appendChild(buildMessageElement(message, previousMessage));
+    scrollMessagesToBottom();
+}
 
-    const textElement = document.createElement('div');
-    textElement.className = 'message-text';
-    textElement.textContent = message.text;
+function buildMessageElement(message, previousMessage = null) {
+    const isOutgoing = message.type === 'outgoing';
+    const showSenderName = shouldShowSenderName(message, previousMessage);
+    const isGrouped = isGroupedWithPrevious(message, previousMessage);
 
-    const footerRow = document.createElement('div');
-    footerRow.className = 'mt-1 flex items-center justify-end gap-1';
+    const row = document.createElement('div');
+    row.className = [
+        'message-row group flex w-full flex-col',
+        isOutgoing ? 'items-end' : 'items-start',
+        isGrouped ? 'mt-0.5' : 'mt-2.5',
+    ].join(' ');
+    row.dataset.messageType = message.type;
+    row.dataset.messageSender = message.sender || '';
 
-    const timeElement = document.createElement('div');
-    timeElement.className = 'message-time text-[10px] text-zinc-500';
-    timeElement.textContent = formatMessageTime(new Date(message.timestamp || Date.now()));
-    footerRow.append(timeElement);
+    if (message.id) row.dataset.messageId = String(message.id);
+    if (message.clientMessageId) row.dataset.clientMessageId = message.clientMessageId;
+    if (message.pending) row.classList.add('is-pending');
 
-    if (message.type === 'outgoing') {
-        const statusElement = document.createElement('span');
-        statusElement.dataset.messageStatus = 'true';
-        statusElement.className = formatMessageStatusClasses(message.status, message.pending);
-        statusElement.textContent = formatMessageStatusIcon(message.status, message.pending);
-        statusElement.title = formatMessageStatusTitle(message.status, message.pending);
-        footerRow.append(statusElement);
+    if (showSenderName) {
+        const nameEl = document.createElement('div');
+        nameEl.className = 'mb-0.5 px-1 text-[11px] font-medium text-indigo-400/90';
+        nameEl.textContent = message.sender;
+        row.append(nameEl);
     }
 
-    const actionsElement = document.createElement('div');
-    actionsElement.className = 'message-actions';
+    const line = document.createElement('div');
+    line.className = [
+        'flex max-w-[min(78%,22rem)] items-end gap-1.5',
+        isOutgoing ? 'flex-row-reverse' : 'flex-row',
+    ].join(' ');
 
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'message-action-btn danger';
-    deleteButton.textContent = 'Delete';
-    deleteButton.disabled = !message.id;
-    deleteButton.title = message.id ? 'Delete message from database' : 'Waiting for database sync';
-    deleteButton.addEventListener('click', () => {
+    const bubble = document.createElement('div');
+    bubble.className = [
+        'message-bubble max-w-full break-words px-2.5 py-1.5 text-[13px] leading-snug shadow-sm',
+        isOutgoing
+            ? 'rounded-2xl rounded-br-md bg-[#2b5278] text-zinc-100'
+            : 'rounded-2xl rounded-bl-md border border-white/5 bg-[#182533] text-zinc-100',
+        message.pending ? 'opacity-70' : '',
+    ].join(' ');
+    bubble.textContent = message.text;
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'message-time shrink-0 pb-0.5 text-[10px] tabular-nums text-zinc-500';
+    timeEl.textContent = formatMessageTime(new Date(message.timestamp || Date.now()));
+
+    line.append(bubble, timeEl);
+
+    if (isOutgoing) {
+        const statusEl = document.createElement('span');
+        statusEl.dataset.messageStatus = 'true';
+        statusEl.className = `shrink-0 pb-0.5 ${formatMessageStatusClasses(message.status, message.pending)}`;
+        statusEl.textContent = formatMessageStatusIcon(message.status, message.pending);
+        statusEl.title = formatMessageStatusTitle(message.status, message.pending);
+        line.append(statusEl);
+    }
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = [
+        'message-action-btn shrink-0 rounded px-1.5 py-0.5 text-[10px] text-red-400/80',
+        'opacity-0 transition-opacity group-hover:opacity-100',
+        'hover:bg-red-500/10 hover:text-red-300',
+    ].join(' ');
+    deleteBtn.textContent = '×';
+    deleteBtn.disabled = !message.id;
+    deleteBtn.title = message.id ? 'Delete message' : 'Waiting for sync';
+    deleteBtn.addEventListener('click', () => {
         if (!message.id) return;
         messageActionHandlers.onDeleteMessage?.(message.id);
     });
+    line.append(deleteBtn);
 
-    actionsElement.append(deleteButton);
-    msgElement.append(senderElement, textElement, footerRow, actionsElement);
-    DOM.messagesDiv.appendChild(msgElement);
-    scrollMessagesToBottom();
+    row.append(line);
+    return row;
+}
+
+function shouldShowSenderName(message, previousMessage) {
+    if (message.type === 'outgoing') return false;
+    if (!previousMessage) return true;
+    if (previousMessage.type === 'outgoing') return true;
+    return previousMessage.sender !== message.sender;
+}
+
+function isGroupedWithPrevious(message, previousMessage) {
+    if (!previousMessage) return false;
+    if (message.type !== previousMessage.type) return false;
+    if (message.type === 'outgoing') return true;
+    return previousMessage.sender === message.sender;
 }
 
 export function updateMessageIdentity(clientMessageId, id, timestamp) {
@@ -301,7 +358,7 @@ export function updateMessageStatus(clientMessageId, messageId, status) {
 
     statusElement.textContent = formatMessageStatusIcon(status, false);
     statusElement.title = formatMessageStatusTitle(status, false);
-    statusElement.className = formatMessageStatusClasses(status, false);
+    statusElement.className = `shrink-0 pb-0.5 ${formatMessageStatusClasses(status, false)}`;
 }
 
 export function removeMessageElement(messageId) {
@@ -401,14 +458,15 @@ export function closeMessageSearch() {
 
 export function searchMessages(query) {
     const normalized = query.trim().toLowerCase();
-    const bubbles = [...DOM.messagesDiv.querySelectorAll('.message-bubble')];
+    const bubbles = [...DOM.messagesDiv.querySelectorAll('.message-row')];
     let matches = 0;
 
     bubbles.forEach(bubble => {
         const haystack = bubble.textContent.toLowerCase();
         const isMatch = !normalized || haystack.includes(normalized);
-        bubble.classList.toggle('is-search-hidden', !isMatch);
-        bubble.classList.toggle('is-search-match', Boolean(normalized && isMatch));
+        bubble.classList.toggle('hidden', !isMatch);
+        bubble.classList.toggle('ring-1', Boolean(normalized && isMatch));
+        bubble.classList.toggle('ring-indigo-500/40', Boolean(normalized && isMatch));
         if (normalized && isMatch) matches += 1;
     });
 
@@ -516,13 +574,7 @@ function renderFilteredUsers() {
         const subtitle = document.createElement('div');
         subtitle.className = 'contact-subtitle text-xs text-zinc-500';
         subtitle.dataset.contactSubtitle = 'true';
-        if (realtimeContext.typingUsers.has(user.username)) {
-            subtitle.innerHTML = buildTypingDotsHtml();
-        } else {
-            subtitle.textContent = user.last_message_at
-                ? formatSidebarTime(user.last_message_at)
-                : 'Secure channel';
-        }
+        applyContactSubtitle(subtitle, user.username, user);
 
         meta.append(name, subtitle);
 
@@ -603,6 +655,25 @@ function getPresenceClasses(username) {
     return realtimeContext.onlineUsers.has(username) ? PRESENCE_ONLINE : PRESENCE_OFFLINE;
 }
 
+function findContactUser(username) {
+    return contactsState.sidebarChats.find(chat => chat.username === username)
+        || contactsState.users.find(chat => chat.username === username);
+}
+
+function applyContactSubtitle(subtitleEl, username, userHint = null) {
+    if (realtimeContext.typingUsers.has(username)) {
+        subtitleEl.innerHTML = buildTypingDotsHtml();
+        subtitleEl.className = 'contact-subtitle text-xs text-zinc-400';
+        return;
+    }
+
+    const user = userHint || findContactUser(username);
+    subtitleEl.textContent = user?.last_message_at
+        ? formatSidebarTime(user.last_message_at)
+        : 'Secure channel';
+    subtitleEl.className = 'contact-subtitle text-xs text-zinc-500';
+}
+
 function buildTypingDotsHtml() {
     return `<span class="inline-flex items-center gap-0.5 text-xs text-zinc-400" aria-label="Typing">
         <span class="h-1 w-1 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.2s]"></span>
@@ -623,9 +694,7 @@ function refreshContactIndicators() {
 
         const subtitle = row.querySelector('[data-contact-subtitle]');
         if (subtitle) {
-            if (realtimeContext.typingUsers.has(username)) {
-                subtitle.innerHTML = buildTypingDotsHtml();
-            }
+            applyContactSubtitle(subtitle, username);
         }
 
         let badge = row.querySelector('[data-unread-badge]');

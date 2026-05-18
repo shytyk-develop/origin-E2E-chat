@@ -8,6 +8,7 @@ import {
     activateChatPanel,
     resetChatPanel,
     appendMessage,
+    renderMessagesList,
     filterUsers,
     focusComposer,
     focusContactSearch,
@@ -465,7 +466,9 @@ function processMessage(chatPartner, messageInput) {
     state.chatHistory[chatPartner].push(message);
 
     if (state.currentTargetUser === chatPartner) {
-        appendMessage(message);
+        const history = state.chatHistory[chatPartner];
+        const prev = history.length > 1 ? history[history.length - 2] : null;
+        appendMessage(message, null, null, null, prev);
     }
     saveHistory(state.myUsername, state.chatHistory);
 }
@@ -553,10 +556,8 @@ async function switchChat(username) {
         console.warn("Database sync unreachable, using browser cache storage fallback:", err);
     }
 
-    if (state.chatHistory[username]) {
-        state.chatHistory[username].forEach(msg => {
-            appendMessage(msg);
-        });
+    if (state.chatHistory[username]?.length) {
+        renderMessagesList(state.chatHistory[username]);
     }
     setComposerValue(loadDraft(state.myUsername, username));
     setDraftStatus(getComposerValue() ? "Draft restored locally" : "Cipher Stack: AES-GCM-256 + RSA-OAEP-2048");
