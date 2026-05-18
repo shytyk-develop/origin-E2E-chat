@@ -134,6 +134,14 @@
     text-transform: uppercase;
 }
 
+.contact-presence {
+    flex-shrink: 0;
+}
+
+.contact-row {
+    align-items: center;
+}
+
 .popover-menu {
     background: var(--panel);
     border: 1px solid var(--b2);

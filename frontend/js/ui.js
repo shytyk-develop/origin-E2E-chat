@@ -122,12 +122,18 @@ export function updateStatus(status, colorClass) {
     const statusIntent = `${status} ${colorClass}`.toLowerCase();
     const isOnline = statusIntent.includes('online') ||
         statusIntent.includes('green') ||
-        statusIntent.includes('emerald') ||
+        statusIntent.includes('emerald');
+    const isReconnecting = statusIntent.includes('reconnect') ||
         statusIntent.includes('yellow');
 
-    DOM.statusSpan.className = isOnline
-        ? 'rounded-full px-2 py-0.5 text-xs font-medium text-emerald-400'
-        : 'rounded-full px-2 py-0.5 text-xs font-medium text-red-400';
+    if (isReconnecting) {
+        DOM.statusSpan.className = 'status-offline';
+        DOM.statusSpan.style.color = 'var(--t2)';
+        return;
+    }
+
+    DOM.statusSpan.className = isOnline ? 'status-online' : 'status-offline';
+    DOM.statusSpan.style.color = '';
 }
 
 export function setSidebarChats(chats, myUsername, onUserSelect, activeUsername = contactsState.activeUsername) {
