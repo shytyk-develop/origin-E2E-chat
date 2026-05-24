@@ -56,7 +56,7 @@ function renderAppearanceQuick(container, payload, runAction) {
         btn.textContent = value === 'system' ? 'Auto' : value.charAt(0).toUpperCase() + value.slice(1);
         btn.classList.toggle('is-active', payload?.theme === value);
         btn.addEventListener('click', () => {
-            closeOverlay();
+            closeOverlay({ reason: 'theme-pick' });
             runAction('theme.set', { theme: value });
         });
         row.append(btn);
@@ -68,7 +68,7 @@ function renderAppearanceQuick(container, payload, runAction) {
     more.style.marginTop = '10px';
     more.textContent = 'All interface settings…';
     more.addEventListener('click', () => {
-        closeOverlay();
+        closeOverlay({ reason: 'open-settings' });
         runAction('settings.modal', {});
     });
 

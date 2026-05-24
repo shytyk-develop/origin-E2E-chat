@@ -8,7 +8,7 @@
 }
 
 #ui-overlay-root.is-active {
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 .overlay-backdrop {
@@ -17,8 +17,9 @@
     background: color-mix(in srgb, var(--bg) 40%, transparent);
     inset: 0;
     opacity: 0;
+    pointer-events: auto;
     position: fixed;
-    transition: opacity 150ms ease;
+    transition: opacity 150ms ease-out;
 }
 
 .overlay-backdrop.is-visible {
@@ -38,12 +39,13 @@
         0 0 0 0.5px color-mix(in srgb, var(--border) 80%, transparent),
         0 12px 40px color-mix(in srgb, var(--bg) 35%, transparent);
     opacity: 0;
+    pointer-events: auto;
     position: fixed;
     transform: scale(0.96) translateY(-2px);
     transform-origin: top left;
     transition:
-        opacity 150ms ease,
-        transform 150ms ease;
+        opacity 150ms ease-out,
+        transform 150ms ease-out;
     z-index: 210;
 }
 
@@ -55,7 +57,8 @@
 .overlay-surface.is-closing {
     opacity: 0;
     transform: scale(0.98) translateY(-1px);
-    transition-duration: 100ms;
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
 }
 
 .overlay-surface--menu {
@@ -82,6 +85,9 @@
     top: 50% !important;
     transform: translate(-50%, -50%) scale(0.96);
     transform-origin: center center;
+    transition:
+        opacity 150ms ease-out,
+        transform 150ms ease-out;
     width: 420px;
 }
 
@@ -91,6 +97,7 @@
 
 .overlay-surface--modal.is-closing {
     transform: translate(-50%, -50%) scale(0.98);
+    transition-duration: 150ms;
 }
 
 .overlay-menu-list {

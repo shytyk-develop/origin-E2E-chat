@@ -1,183 +1,220 @@
-// Single source of truth for all floating UI (dropdown, context, popover, modal).
+// Single source of truth for all floating UI — production lifecycle + positioning.
 
 import { renderDropdown } from './dropdown.js';
 import { renderContextMenu } from './contextMenu.js';
 import { renderPopover } from './popover.js';
 import { renderModal, attachModalPanel, releaseModalPanel } from './modal.js';
+import { computeOverlayPosition, applyOverlayPosition } from './positioning.js';
+import { overlayDebug, isOverlayDebugEnabled } from './debug.js';
 
-const CLOSE_DELAY_MS = 100;
-const OPEN_ANIM_MS = 16;
+export const ANIM_MS = 150;
+const OPEN_GUARD_MS = 160;
 
 /** @type {import('./overlayManager.js').OverlayState | null} */
 let overlayState = null;
+let generation = 0;
+let lifecycleQueue = Promise.resolve();
 let closeTimer = null;
 let openFrame = null;
+let ignoreOutsideUntil = 0;
+let isClosing = false;
+
 let rootEl = null;
 let backdropEl = null;
 let surfaceEl = null;
+
 /** @type {Record<string, Function>} */
 let actions = {};
-let scrollCloseBound = false;
-let ignoreOutsideUntil = 0;
+
+let listenersBound = false;
+let onKeyDown = null;
+let onPointerDown = null;
+let onResize = null;
+let onVisualViewportChange = null;
+let scrollTargets = [];
 
 /**
  * @typedef {Object} OverlayState
  * @property {'dropdown'|'context'|'popover'|'modal'} type
  * @property {{ x: number, y: number }} [position]
- * @property {DOMRect} [anchorRect]
+ * @property {Object} [anchorRect]
  * @property {Record<string, unknown>} payload
  * @property {string|null} targetId
+ * @property {number} generation
  */
+
+function freezeState(next, gen) {
+    return Object.freeze({
+        type: next.type,
+        position: next.position ? Object.freeze({ x: next.position.x, y: next.position.y }) : undefined,
+        anchorRect: normalizeRect(next.anchorRect),
+        payload: Object.freeze({ ...(next.payload || {}) }),
+        targetId: next.targetId ?? null,
+        generation: gen,
+    });
+}
+
+function normalizeRect(rect) {
+    if (!rect) return undefined;
+    return Object.freeze({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        left: rect.left,
+    });
+}
+
+function runLifecycle(task) {
+    lifecycleQueue = lifecycleQueue
+        .then(task)
+        .catch((err) => {
+            console.error('[overlay] lifecycle error:', err);
+        });
+    return lifecycleQueue;
+}
+
+function clearTimers() {
+    window.clearTimeout(closeTimer);
+    window.cancelAnimationFrame(openFrame);
+    closeTimer = null;
+    openFrame = null;
+}
+
+function hardDestroy(reason) {
+    clearTimers();
+
+    const closingState = overlayState;
+    if (closingState?.type === 'modal' && closingState.payload?.modalId) {
+        releaseModalPanel(closingState.payload.modalId);
+    }
+
+    overlayState = null;
+    isClosing = false;
+    backdropEl = null;
+    surfaceEl = null;
+
+    if (rootEl) {
+        rootEl.innerHTML = '';
+        rootEl.classList.remove('is-active');
+        rootEl.setAttribute('aria-hidden', 'true');
+    }
+
+    overlayDebug('destroy', { reason, generation });
+}
+
+function animateClose(gen, reason) {
+    return new Promise((resolve) => {
+        if (!overlayState || overlayState.generation !== gen) {
+            resolve();
+            return;
+        }
+
+        isClosing = true;
+        overlayDebug('close-start', { reason, gen });
+
+        surfaceEl?.classList.remove('is-visible');
+        surfaceEl?.classList.add('is-closing');
+        backdropEl?.classList.remove('is-visible');
+
+        closeTimer = window.setTimeout(() => {
+            if (overlayState?.generation === gen) {
+                hardDestroy(reason);
+            }
+            isClosing = false;
+            overlayDebug('close-done', { reason, gen });
+            resolve();
+        }, ANIM_MS);
+    });
+}
 
 export function registerOverlayActions(handlers) {
     actions = { ...actions, ...handlers };
 }
 
-export function getOverlayAction(id) {
-    return actions[id];
-}
-
 export function runOverlayAction(id, payload = {}) {
     const fn = actions[id];
-    if (typeof fn === 'function') {
-        fn(payload);
-    }
+    if (typeof fn === 'function') fn(payload);
 }
 
 export function getOverlayState() {
-    return overlayState ? { ...overlayState } : null;
+    if (!overlayState) return null;
+    return {
+        type: overlayState.type,
+        position: overlayState.position ? { ...overlayState.position } : undefined,
+        anchorRect: overlayState.anchorRect ? { ...overlayState.anchorRect } : undefined,
+        payload: { ...overlayState.payload },
+        targetId: overlayState.targetId,
+        generation: overlayState.generation,
+    };
 }
 
 export function isOverlayOpen() {
-    return overlayState !== null;
+    return overlayState !== null && !isClosing;
 }
 
 /**
- * @param {OverlayState} next
+ * @param {{ immediate?: boolean, reason?: string }} [options]
+ */
+export function closeOverlay(options = {}) {
+    const { immediate = false, reason = 'manual' } = options;
+
+    return runLifecycle(async () => {
+        if (!overlayState) return;
+
+        const gen = overlayState.generation;
+        generation += 1;
+
+        if (immediate) {
+            hardDestroy(reason);
+            return;
+        }
+
+        await animateClose(gen, reason);
+    });
+}
+
+export function destroyAllOverlays(reason = 'destroy-all') {
+    generation += 1;
+    return closeOverlay({ immediate: true, reason });
+}
+
+export function closeOverlaysForChatChange() {
+    return destroyAllOverlays('chat-change');
+}
+
+export function closeOverlaysForRouteChange() {
+    return destroyAllOverlays('route-change');
+}
+
+/**
+ * @param {Omit<OverlayState, 'generation'>} next
  */
 export function openOverlay(next) {
-    window.clearTimeout(closeTimer);
-    window.cancelAnimationFrame(openFrame);
+    return runLifecycle(async () => {
+        await closeOverlay({ immediate: true, reason: 'replace' });
 
-    if (overlayState?.type === 'modal') {
-        releaseModalPanel(overlayState.payload?.modalId);
-    }
+        generation += 1;
+        const gen = generation;
+        ignoreOutsideUntil = Date.now() + OPEN_GUARD_MS;
 
-    ignoreOutsideUntil = Date.now() + 180;
+        overlayState = freezeState(next, gen);
+        overlayDebug('open', {
+            type: next.type,
+            targetId: next.targetId,
+            generation: gen,
+        });
 
-    overlayState = {
-        type: next.type,
-        position: next.position ? { ...next.position } : undefined,
-        anchorRect: next.anchorRect
-            ? {
-                x: next.anchorRect.x,
-                y: next.anchorRect.y,
-                width: next.anchorRect.width,
-                height: next.anchorRect.height,
-                top: next.anchorRect.top,
-                right: next.anchorRect.right,
-                bottom: next.anchorRect.bottom,
-                left: next.anchorRect.left,
-            }
-            : undefined,
-        payload: next.payload ? { ...next.payload } : {},
-        targetId: next.targetId ?? null,
-    };
-
-    renderOverlay({ animate: true });
+        mountOverlay(gen);
+        return getOverlayState();
+    });
 }
 
-export function closeOverlay({ immediate = false } = {}) {
-    if (!overlayState) return;
-
-    window.clearTimeout(closeTimer);
-    window.cancelAnimationFrame(openFrame);
-
-    if (surfaceEl) {
-        surfaceEl.classList.remove('is-visible');
-        surfaceEl.classList.add('is-closing');
-    }
-    if (backdropEl) {
-        backdropEl.classList.remove('is-visible');
-    }
-
-    const closingType = overlayState.type;
-    const closingPayload = { ...overlayState.payload };
-
-    const finish = () => {
-        if (closingType === 'modal') {
-            releaseModalPanel(closingPayload.modalId);
-        }
-        overlayState = null;
-        if (rootEl) {
-            rootEl.innerHTML = '';
-            rootEl.classList.remove('is-active');
-            rootEl.setAttribute('aria-hidden', 'true');
-        }
-        surfaceEl = null;
-        backdropEl = null;
-    };
-
-    if (immediate) {
-        finish();
-        return;
-    }
-
-    closeTimer = window.setTimeout(finish, CLOSE_DELAY_MS);
-}
-
-export function initOverlayManager({ rootId = 'ui-overlay-root' } = {}) {
-    rootEl = document.getElementById(rootId);
-    if (!rootEl) {
-        rootEl = document.createElement('div');
-        rootEl.id = rootId;
-        document.body.appendChild(rootEl);
-    }
-
-    if (!scrollCloseBound) {
-        scrollCloseBound = true;
-        document.addEventListener(
-            'keydown',
-            (event) => {
-                if (event.key === 'Escape' && overlayState) {
-                    event.preventDefault();
-                    closeOverlay();
-                }
-            },
-            true
-        );
-
-        document.addEventListener(
-            'mousedown',
-            (event) => {
-                if (Date.now() < ignoreOutsideUntil) return;
-                if (!overlayState || overlayState.type === 'modal') return;
-                if (surfaceEl?.contains(event.target)) return;
-                const anchorId = overlayState.payload?.anchorId;
-                if (anchorId) {
-                    const anchor = document.getElementById(anchorId);
-                    if (anchor?.contains(event.target)) return;
-                }
-                closeOverlay();
-            },
-            true
-        );
-
-        const messages = document.getElementById('messages');
-        messages?.addEventListener(
-            'scroll',
-            () => {
-                if (overlayState && (overlayState.type === 'dropdown' || overlayState.type === 'context')) {
-                    closeOverlay({ immediate: true });
-                }
-            },
-            { passive: true }
-        );
-    }
-}
-
-function renderOverlay({ animate }) {
-    if (!rootEl || !overlayState) return;
+function mountOverlay(gen) {
+    if (!rootEl || !overlayState || overlayState.generation !== gen) return;
 
     rootEl.innerHTML = '';
     rootEl.classList.add('is-active');
@@ -191,12 +228,17 @@ function renderOverlay({ animate }) {
     if (needsBackdrop) {
         backdropEl = document.createElement('div');
         backdropEl.className = `overlay-backdrop${overlayState.type === 'modal' ? ' is-modal' : ''}`;
-        backdropEl.addEventListener('mousedown', () => closeOverlay());
+        backdropEl.addEventListener('mousedown', (event) => {
+            event.stopPropagation();
+            closeOverlay({ reason: 'backdrop' });
+        });
         rootEl.appendChild(backdropEl);
     }
 
     surfaceEl = document.createElement('div');
-    surfaceEl.className = `overlay-surface overlay-surface--${overlayState.type === 'context' ? 'menu' : overlayState.type}`;
+    const surfaceKind =
+        overlayState.type === 'context' ? 'menu' : overlayState.type;
+    surfaceEl.className = `overlay-surface overlay-surface--${surfaceKind}`;
     surfaceEl.setAttribute('role', overlayState.type === 'modal' ? 'dialog' : 'menu');
     surfaceEl.setAttribute('aria-modal', overlayState.type === 'modal' ? 'true' : 'false');
 
@@ -219,79 +261,176 @@ function renderOverlay({ animate }) {
     }
 
     rootEl.appendChild(surfaceEl);
-    positionSurface(surfaceEl, overlayState);
 
-    if (animate) {
+    openFrame = window.requestAnimationFrame(() => {
         openFrame = window.requestAnimationFrame(() => {
-            positionSurface(surfaceEl, overlayState);
+            if (overlayState?.generation !== gen || !surfaceEl) return;
+            layoutSurface(surfaceEl, overlayState);
             backdropEl?.classList.add('is-visible');
-            surfaceEl?.classList.add('is-visible');
+            surfaceEl.classList.add('is-visible');
         });
-    } else {
-        backdropEl?.classList.add('is-visible');
-        surfaceEl?.classList.add('is-visible');
-    }
+    });
 }
 
-/**
- * @param {HTMLElement} el
- * @param {OverlayState} state
- */
-export function positionSurface(el, state) {
-    const pad = 8;
-    const rect = el.getBoundingClientRect();
-    const menuW = rect.width || 220;
-    const menuH = rect.height || 120;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
+function layoutSurface(el, state) {
     if (state.type === 'modal') {
-        el.style.left = '50%';
-        el.style.top = '50%';
+        applyOverlayPosition(el, { x: 0, y: 0 }, { isModal: true });
         return;
     }
 
-    let x;
-    let y;
+    const rect = el.getBoundingClientRect();
+    const menuSize = {
+        width: rect.width || el.offsetWidth || 220,
+        height: rect.height || el.offsetHeight || 120,
+    };
 
-    if (state.anchorRect) {
-        const a = state.anchorRect;
-        x = a.left;
-        y = a.bottom + 6;
-        if (y + menuH > vh - pad) {
-            y = a.top - menuH - 6;
+    const anchorRect = state.anchorRect
+        ? {
+            top: state.anchorRect.top,
+            left: state.anchorRect.left,
+            right: state.anchorRect.right,
+            bottom: state.anchorRect.bottom,
+            width: state.anchorRect.width,
+            height: state.anchorRect.height,
         }
-        if (x + menuW > vw - pad) {
-            x = a.right - menuW;
-        }
-    } else if (state.position) {
-        x = state.position.x;
-        y = state.position.y;
-        if (x + menuW > vw - pad) x = vw - menuW - pad;
-        if (y + menuH > vh - pad) y = vh - menuH - pad;
-    } else {
-        x = pad;
-        y = pad;
+        : undefined;
+
+    const position = computeOverlayPosition(
+        anchorRect,
+        state.position,
+        menuSize
+    );
+
+    applyOverlayPosition(el, position, { isModal: false });
+
+    overlayDebug('position', {
+        type: state.type,
+        menuSize,
+        result: position,
+    });
+}
+
+export function repositionActiveOverlay() {
+    if (!overlayState || !surfaceEl || overlayState.type === 'modal') return;
+    layoutSurface(surfaceEl, overlayState);
+}
+
+function eventComposedPath(event) {
+    if (typeof event.composedPath === 'function') {
+        return event.composedPath();
+    }
+    return [event.target];
+}
+
+function handlePointerDown(event) {
+    if (!overlayState || isClosing) return;
+    if (Date.now() < ignoreOutsideUntil) return;
+
+    const path = eventComposedPath(event);
+
+    if (surfaceEl && path.includes(surfaceEl)) return;
+
+    const anchorId = overlayState.payload?.anchorId;
+    if (anchorId) {
+        const anchor = document.getElementById(anchorId);
+        if (anchor && path.includes(anchor)) return;
     }
 
-    x = Math.max(pad, Math.min(x, vw - menuW - pad));
-    y = Math.max(pad, Math.min(y, vh - menuH - pad));
+    if (backdropEl && path.includes(backdropEl)) {
+        return;
+    }
 
-    el.style.left = `${Math.round(x)}px`;
-    el.style.top = `${Math.round(y)}px`;
+    closeOverlay({ reason: 'outside' });
+}
+
+function handleKeyDown(event) {
+    if (event.key !== 'Escape' || !overlayState) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeOverlay({ reason: 'esc' });
+}
+
+function handleViewportChange() {
+    repositionActiveOverlay();
+}
+
+function bindGlobalListeners() {
+    if (listenersBound) return;
+    listenersBound = true;
+
+    onKeyDown = handleKeyDown;
+    onPointerDown = handlePointerDown;
+    onResize = handleViewportChange;
+    onVisualViewportChange = handleViewportChange;
+
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('mousedown', onPointerDown, true);
+    window.addEventListener('resize', onResize, { passive: true });
+    window.visualViewport?.addEventListener('resize', onVisualViewportChange);
+    window.visualViewport?.addEventListener('scroll', onVisualViewportChange);
+
+    const messages = document.getElementById('messages');
+    if (messages) {
+        const onScroll = () => {
+            if (
+                overlayState &&
+                (overlayState.type === 'dropdown' || overlayState.type === 'context')
+            ) {
+                closeOverlay({ immediate: true, reason: 'scroll' });
+            }
+        };
+        messages.addEventListener('scroll', onScroll, { passive: true });
+        scrollTargets.push({ el: messages, fn: onScroll });
+    }
+}
+
+export function teardownOverlayManager() {
+    destroyAllOverlays('teardown');
+
+    if (!listenersBound) return;
+    listenersBound = false;
+
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('mousedown', onPointerDown, true);
+    window.removeEventListener('resize', onResize);
+    window.visualViewport?.removeEventListener('resize', onVisualViewportChange);
+    window.visualViewport?.removeEventListener('scroll', onVisualViewportChange);
+
+    scrollTargets.forEach(({ el, fn }) => el.removeEventListener('scroll', fn));
+    scrollTargets = [];
+
+    onKeyDown = null;
+    onPointerDown = null;
+    onResize = null;
+    onVisualViewportChange = null;
+}
+
+export function initOverlayManager({ rootId = 'ui-overlay-root' } = {}) {
+    rootEl = document.getElementById(rootId);
+    if (!rootEl) {
+        rootEl = document.createElement('div');
+        rootEl.id = rootId;
+        document.body.appendChild(rootEl);
+    }
+
+    bindGlobalListeners();
+
+    if (isOverlayDebugEnabled()) {
+        console.info('[overlay] debug mode enabled (ui_overlay_debug=1)');
+    }
 }
 
 export function openDropdown({ menuId, anchor, targetId = null, payload = {} }) {
     const tid = targetId || menuId;
     const current = getOverlayState();
     if (current?.type === 'dropdown' && current.targetId === tid) {
-        closeOverlay();
-        return;
+        return closeOverlay({ reason: 'toggle' });
     }
 
     const anchorEl = typeof anchor === 'string' ? document.getElementById(anchor) : anchor;
     const anchorRect = anchorEl?.getBoundingClientRect();
-    openOverlay({
+
+    return openOverlay({
         type: 'dropdown',
         anchorRect,
         payload: { menuId, anchorId: anchorEl?.id || null, ...payload },
@@ -299,12 +438,8 @@ export function openDropdown({ menuId, anchor, targetId = null, payload = {} }) 
     });
 }
 
-export function closeOverlaysForChatChange() {
-    closeOverlay({ immediate: true });
-}
-
 export function openContextMenu({ x, y, payload, targetId = null }) {
-    openOverlay({
+    return openOverlay({
         type: 'context',
         position: { x, y },
         payload,
@@ -314,16 +449,21 @@ export function openContextMenu({ x, y, payload, targetId = null }) {
 
 export function openPopoverOverlay({ popoverId, anchor, payload = {}, targetId = null }) {
     const anchorEl = typeof anchor === 'string' ? document.getElementById(anchor) : anchor;
-    openOverlay({
+    return openOverlay({
         type: 'popover',
         anchorRect: anchorEl?.getBoundingClientRect(),
-        payload: { popoverId, ...payload },
+        payload: { popoverId, anchorId: anchorEl?.id || null, ...payload },
         targetId: targetId || popoverId,
     });
 }
 
 export function openModalOverlay(modalId, targetId = null) {
-    openOverlay({
+    const current = getOverlayState();
+    if (current?.type === 'modal' && current.targetId === (targetId || modalId)) {
+        return closeOverlay({ reason: 'toggle' });
+    }
+
+    return openOverlay({
         type: 'modal',
         payload: { modalId },
         targetId: targetId || modalId,

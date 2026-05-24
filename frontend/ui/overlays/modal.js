@@ -34,11 +34,14 @@ export function attachModalPanel(modalId, container) {
     panel.classList.add('modal-panel');
     container.appendChild(panel);
 
-    const closeBtn = panel.querySelector('#uiCloseSettingsBtn, #uiCloseShortcutsBtn');
-    if (closeBtn && !closeBtn.dataset.overlayBound) {
+    panel.querySelectorAll('#uiCloseSettingsBtn, #uiCloseShortcutsBtn').forEach((closeBtn) => {
+        if (closeBtn.dataset.overlayBound) return;
         closeBtn.dataset.overlayBound = '1';
-        closeBtn.addEventListener('click', () => closeOverlay());
-    }
+        closeBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeOverlay({ reason: 'modal-close-btn' });
+        });
+    });
 }
 
 export function releaseModalPanel(modalId) {

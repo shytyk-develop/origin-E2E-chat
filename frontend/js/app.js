@@ -49,6 +49,7 @@ import { createRealtimeController, isUserOnline } from './realtime.js';
 import {
     initOverlayManager,
     registerOverlayActions,
+    closeOverlaysForRouteChange,
 } from '../ui/overlays/overlayManager.js';
 import {
     MESSAGE_STATUS,
@@ -367,6 +368,7 @@ initMessageContextMenu((row) => {
 
 // Main routing handler
 async function handleNavigation(view, param) {
+    closeOverlaysForRouteChange();
     document.querySelectorAll('.route-page').forEach(page => page.classList.add('hidden'));
 
     if (view === 'login') {
@@ -1083,6 +1085,7 @@ async function deleteSingleMessage(messageId) {
 
 function handleLogout() {
     persistCurrentDraft();
+    closeOverlaysForRouteChange();
 
     if (socketConnection) {
         socketConnection.close();

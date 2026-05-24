@@ -68,7 +68,7 @@ export function renderDropdown(container, state, runAction) {
 
         btn.addEventListener('click', () => {
             if (item.disabled) return;
-            closeOverlay();
+            closeOverlay({ reason: 'menu-action' });
             runAction(item.id, state.payload);
         });
 
