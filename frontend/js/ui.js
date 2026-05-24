@@ -100,7 +100,7 @@ const UNREAD_BADGE =
     'flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500 px-1.5 text-[10px] font-bold leading-none text-white';
 
 const COMPOSER_DEFAULT_META = 'Cipher Stack: AES-GCM-256 + RSA-OAEP-2048';
-const MAX_MESSAGE_LENGTH = 2000;
+export const MAX_MESSAGE_LENGTH = 2000;
 const messageActionHandlers = {
     onDeleteMessage: null,
     onReply: null,
@@ -389,8 +389,6 @@ function buildMessageElement(message, previousMessage = null) {
     inner.append(bodyRow);
     bubble.append(inner);
 
-    shell.append(bubble);
-
     const hoverActions = document.createElement('div');
     hoverActions.className = 'message-hover-actions';
     hoverActions.setAttribute('role', 'group');
@@ -441,7 +439,7 @@ function buildMessageElement(message, previousMessage = null) {
         hoverActions.append(replyBtn, reactBtn, deleteBtn);
     }
 
-    shell.append(hoverActions);
+    shell.append(bubble, hoverActions);
     contentWrap.append(shell);
 
     const reactionsEl = buildReactionsEl(message);
@@ -650,8 +648,34 @@ export function autoResizeComposer() {
 
 export function updateComposerMeta(text) {
     const length = text.length;
-    DOM.charCounter.textContent = `${length} / ${MAX_MESSAGE_LENGTH}`;
-    DOM.charCounter.classList.toggle('danger', length > MAX_MESSAGE_LENGTH);
+    const over = length > MAX_MESSAGE_LENGTH;
+    DOM.charCounter.textContent = over
+        ? `${length} / ${MAX_MESSAGE_LENGTH} — limit exceeded`
+        : `${length} / ${MAX_MESSAGE_LENGTH}`;
+    DOM.charCounter.classList.toggle('danger', over);
+    if (DOM.draftStatus?.dataset.limitError === '1' && !over) {
+        DOM.draftStatus.dataset.limitError = '0';
+        setDraftStatus(
+            text.trim() ? 'Draft saved locally' : COMPOSER_DEFAULT_META
+        );
+    }
+}
+
+export function showComposerLimitError(message) {
+    DOM.charCounter.classList.add('danger');
+    DOM.charCounter.textContent = message;
+    if (DOM.draftStatus) {
+        DOM.draftStatus.dataset.limitError = '1';
+        DOM.draftStatus.textContent = message;
+        DOM.draftStatus.classList.add('danger');
+    }
+}
+
+export function clearComposerLimitError() {
+    if (DOM.draftStatus?.dataset.limitError === '1') {
+        DOM.draftStatus.dataset.limitError = '0';
+        DOM.draftStatus.classList.remove('danger');
+    }
 }
 
 export function setDraftStatus(text = COMPOSER_DEFAULT_META) {

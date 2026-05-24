@@ -49,6 +49,9 @@ import {
     patchMessageReactionsDom,
     openReactionPicker,
     scrollToMessageById,
+    MAX_MESSAGE_LENGTH,
+    showComposerLimitError,
+    clearComposerLimitError,
 } from './ui.js';
 import {
     attachReplyToMessage,
@@ -907,11 +910,14 @@ async function handleSendMessage() {
         return;
     }
 
-    if (text.length > 2000) {
-        showToast("Message is over the 2000 character limit.", "error");
+    if (text.length > MAX_MESSAGE_LENGTH) {
+        showComposerLimitError(
+            `Message exceeds ${MAX_MESSAGE_LENGTH} characters and was not sent.`
+        );
         focusComposer();
         return;
     }
+    clearComposerLimitError();
 
     const targetPublicKeyJWK = state.usersDirectory[state.currentTargetUser];
     if (!targetPublicKeyJWK) {
@@ -973,7 +979,11 @@ async function handleSendMessage() {
         setDraftStatus("Message queued. Waiting for database sync.");
     } catch (err) {
         console.error("Message send failed:", err);
-        showToast("Message send failed. Check connection and keys.", "error");
+        if (err instanceof RangeError) {
+            showComposerLimitError(err.message);
+        } else {
+            showToast("Message send failed. Check connection and keys.", "error");
+        }
     } finally {
         focusComposer();
     }
@@ -993,6 +1003,7 @@ DOM.sendBtn.addEventListener('click', handleSendMessage);
 
 DOM.messageInput.addEventListener('input', () => {
     autoResizeComposer();
+    clearComposerLimitError();
     updateComposerMeta(getComposerValue());
     persistCurrentDraft();
     if (state.currentTargetUser && getComposerValue().trim()) {

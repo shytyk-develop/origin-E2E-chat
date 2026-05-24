@@ -6,7 +6,7 @@ export function truncateReplyPreview(text) {
     if (!text) return '';
     const normalized = String(text).replace(/\s+/g, ' ').trim();
     if (normalized.length <= REPLY_PREVIEW_MAX) return normalized;
-    return `${normalized.slice(0, REPLY_PREVIEW_MAX).trimEnd()}…`;
+    return `${normalized.slice(0, REPLY_PREVIEW_MAX).trimEnd()}...`;
 }
 
 export function findMessageById(chatHistory, partner, messageId) {

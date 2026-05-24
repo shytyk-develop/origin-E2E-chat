@@ -72,11 +72,19 @@
 }
 
 .message-reply-preview {
+    border: none;
     border-left: 3px solid var(--accent);
     border-radius: 8px;
     cursor: pointer;
+    display: block;
+    font: inherit;
+    margin: 0;
+    max-width: 100%;
+    min-width: 0;
     padding: 4px 8px 4px 6px;
+    text-align: left;
     transition: background 120ms ease;
+    width: 100%;
 }
 
 .message-bubble--own .message-reply-preview {
@@ -111,10 +119,17 @@
 }
 
 .message-reply-text {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     color: var(--text-secondary);
-    display: block;
+    display: -webkit-box;
     font-size: 12px;
     line-height: 1.35;
+    max-width: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    word-break: break-word;
 }
 
 .message-bubble--own .message-reply-text {
@@ -122,25 +137,39 @@
 }
 
 .message-body-row {
-    align-items: baseline;
+    align-items: flex-end;
     display: flex;
     flex-wrap: wrap;
     gap: 6px 8px;
+    max-width: 100%;
+    min-width: 0;
 }
 
-/* Hover actions — absolute overlay; never affects bubble width or alignment */
+.message-text {
+    flex: 1 1 auto;
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Side gutter actions — beside bubble, never on top of text */
 .message-hover-actions {
     align-items: center;
+    align-self: center;
     display: flex;
+    flex-shrink: 0;
     gap: 4px;
     opacity: 0;
     pointer-events: none;
     position: absolute;
-    top: -14px;
+    top: 50%;
+    transform: translateY(-50%);
     transition: opacity 140ms ease, visibility 140ms ease;
     visibility: hidden;
     white-space: nowrap;
-    z-index: 6;
+    z-index: 4;
 }
 
 .message-row:hover .message-hover-actions,
@@ -151,12 +180,19 @@
     visibility: visible;
 }
 
-.message-row--own .message-hover-actions {
-    right: 6px;
+/* Incoming: free space on the right of bubble */
+.message-row--other .message-hover-actions {
+    left: calc(100% + 8px);
 }
 
-.message-row--other .message-hover-actions {
-    left: 6px;
+/* Own: free space on the left of bubble */
+.message-row--own .message-hover-actions {
+    right: calc(100% + 8px);
+}
+
+#uiDraftStatus.danger,
+#uiCharCounter.danger {
+    color: var(--red) !important;
 }
 
 .message-quick-btn,
