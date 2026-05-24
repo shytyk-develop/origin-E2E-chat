@@ -247,7 +247,10 @@ function buildMessageElement(message, previousMessage = null) {
 
     if (message.id) row.dataset.messageId = String(message.id);
     if (message.clientMessageId) row.dataset.clientMessageId = message.clientMessageId;
-    if (message.pending) row.classList.add('is-pending');
+
+    const status = message.status || (message.pending ? 'sending' : (isOutgoing ? 'sent' : undefined));
+    if (status) row.dataset.messageStatus = status;
+    applyPendingVisual(row, status);
 
     if (showSenderName) {
         const nameEl = document.createElement('div');
@@ -271,7 +274,6 @@ function buildMessageElement(message, previousMessage = null) {
         isOutgoing
             ? 'rounded-2xl rounded-br-sm bg-[#2b5278] text-zinc-100'
             : 'rounded-2xl rounded-bl-sm border border-white/5 bg-[#182533] text-zinc-100',
-        message.pending ? 'opacity-70' : '',
     ].join(' ');
 
     const textEl = document.createElement('span');
@@ -293,9 +295,9 @@ function buildMessageElement(message, previousMessage = null) {
     if (isOutgoing) {
         const statusEl = document.createElement('span');
         statusEl.dataset.messageStatus = 'true';
-        statusEl.className = formatMessageStatusClasses(message.status, message.pending);
-        statusEl.textContent = formatMessageStatusIcon(message.status, message.pending);
-        statusEl.title = formatMessageStatusTitle(message.status, message.pending);
+        statusEl.className = formatMessageStatusClasses(status, false);
+        statusEl.textContent = formatMessageStatusIcon(status, false);
+        statusEl.title = formatMessageStatusTitle(status, false);
         meta.append(statusEl);
     }
 
@@ -335,12 +337,13 @@ function isGroupedWithPrevious(message, previousMessage) {
     return previousMessage.sender === message.sender;
 }
 
-export function updateMessageIdentity(clientMessageId, id, timestamp) {
+export function updateMessageIdentity(clientMessageId, id, timestamp, status = 'sent') {
     const msgElement = DOM.messagesDiv.querySelector(`[data-client-message-id="${CSS.escape(clientMessageId)}"]`);
     if (!msgElement) return;
 
     msgElement.dataset.messageId = String(id);
-    msgElement.classList.remove('is-pending');
+    msgElement.dataset.messageStatus = status;
+    applyPendingVisual(msgElement, status);
 
     const deleteButton = msgElement.querySelector('.message-action-btn');
     if (deleteButton) {
@@ -353,7 +356,7 @@ export function updateMessageIdentity(clientMessageId, id, timestamp) {
         timeElement.textContent = formatMessageTime(new Date(timestamp));
     }
 
-    updateMessageStatus(clientMessageId, id, 'sent');
+    updateMessageStatus(clientMessageId, id, status);
 }
 
 export function updateMessageStatus(clientMessageId, messageId, status) {
@@ -367,12 +370,26 @@ export function updateMessageStatus(clientMessageId, messageId, status) {
     const msgElement = DOM.messagesDiv.querySelector(selector);
     if (!msgElement) return;
 
+    msgElement.dataset.messageStatus = status;
+    applyPendingVisual(msgElement, status);
+
     const statusElement = msgElement.querySelector('[data-message-status]');
     if (!statusElement) return;
 
     statusElement.textContent = formatMessageStatusIcon(status, false);
     statusElement.title = formatMessageStatusTitle(status, false);
     statusElement.className = formatMessageStatusClasses(status, false);
+}
+
+function applyPendingVisual(row, status) {
+    const isPending = status === 'pending' || status === 'sending';
+    row.classList.toggle('is-pending', isPending);
+
+    const bubble = row.querySelector('.message-bubble');
+    if (bubble) {
+        bubble.classList.toggle('ring-1', isPending);
+        bubble.classList.toggle('ring-white/10', isPending);
+    }
 }
 
 export function removeMessageElement(messageId) {
@@ -755,26 +772,30 @@ function refreshChatHeaderSubtitle() {
         : '<span class="text-sm font-medium text-red-400">Offline</span>';
 }
 
-function formatMessageStatusIcon(status, pending) {
-    if (pending || status === 'sending') return '◔';
+function formatMessageStatusIcon(status) {
+    if (status === 'pending' || status === 'sending') return '◔';
+    if (status === 'failed') return '!';
     if (status === 'read') return '✓✓';
     if (status === 'delivered') return '✓✓';
     if (status === 'sent') return '✓';
-    return '◔';
+    return '';
 }
 
-function formatMessageStatusTitle(status, pending) {
-    if (pending || status === 'sending') return 'Sending';
+function formatMessageStatusTitle(status) {
+    if (status === 'pending' || status === 'sending') return 'Sending';
+    if (status === 'failed') return 'Failed';
     if (status === 'read') return 'Read';
     if (status === 'delivered') return 'Delivered';
-    if (status === 'sent') return 'Sent';
-    return 'Sending';
+    if (status === 'sent') return 'Sent to server';
+    return '';
 }
 
-function formatMessageStatusClasses(status, pending) {
+function formatMessageStatusClasses(status) {
     const base = 'text-[11px] leading-none';
-    if (pending || status === 'sending') return `${base} text-zinc-500`;
+    if (status === 'pending' || status === 'sending') return `${base} text-zinc-400 animate-pulse`;
+    if (status === 'failed') return `${base} text-red-400`;
     if (status === 'read') return `${base} text-emerald-400`;
     if (status === 'delivered') return `${base} text-zinc-400`;
+    if (status === 'sent') return `${base} text-zinc-500`;
     return `${base} text-zinc-500`;
 }

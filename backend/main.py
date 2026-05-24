@@ -206,6 +206,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 
             elif data["type"] == "read_receipt":
                 await manager.handle_read_receipt(data, websocket)
+
+            elif data["type"] == "chat_focus":
+                await manager.handle_chat_focus(data, websocket)
             
     except WebSocketDisconnect:
         await manager.disconnect(websocket)

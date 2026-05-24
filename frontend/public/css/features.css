@@ -211,8 +211,8 @@
     outline-offset: 2px;
 }
 
-.message-bubble.is-pending {
-    opacity: 0.72;
+.message-row.is-pending .message-bubble {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .message-actions {

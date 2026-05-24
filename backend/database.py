@@ -471,7 +471,8 @@ def get_chat_history_db(user: str, partner: str, limit: int = 50, offset: int = 
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            SELECT id, sender, receiver, content_recipient, content_sender, client_message_id, timestamp
+            SELECT id, sender, receiver, content_recipient, content_sender, client_message_id, timestamp,
+                   delivered_at, read_at
             FROM chat_history 
             WHERE (sender = %s AND receiver = %s) OR (sender = %s AND receiver = %s)
             ORDER BY id DESC
@@ -489,7 +490,9 @@ def get_chat_history_db(user: str, partner: str, limit: int = 50, offset: int = 
             "content_recipient": json.loads(r[3]),
             "content_sender": json.loads(r[4]),
             "client_message_id": r[5],
-            "timestamp": r[6].isoformat() if r[6] else None
+            "timestamp": r[6].isoformat() if r[6] else None,
+            "delivered_at": r[7].isoformat() if r[7] else None,
+            "read_at": r[8].isoformat() if r[8] else None,
         } for r in rows]
     finally:
         release_connection(conn)

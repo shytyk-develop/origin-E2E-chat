@@ -15,7 +15,11 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections[websocket] = {"username": None, "public_key": None}
+        self.active_connections[websocket] = {
+            "username": None,
+            "public_key": None,
+            "active_chat": None,
+        }
 
     async def disconnect(self, websocket: WebSocket):
         session = self.active_connections.pop(websocket, None)
@@ -126,16 +130,27 @@ class ConnectionManager:
             "is_typing": bool(data.get("is_typing", True)),
         })
 
+    async def handle_chat_focus(self, data: dict, websocket: WebSocket):
+        username = self._session_username(websocket)
+        if not username:
+            return
+        partner = data.get("partner")
+        if partner:
+            self.active_connections[websocket]["active_chat"] = partner
+        else:
+            self.active_connections[websocket]["active_chat"] = None
+
     async def handle_delivery_ack(self, data: dict, websocket: WebSocket):
         recipient = self._session_username(websocket)
         message_id = data.get("message_id")
         client_message_id = data.get("client_message_id")
         sender = data.get("from")
-        if not recipient or not sender:
+        if not recipient or not sender or not message_id:
             return
 
-        if message_id:
-            await asyncio.to_thread(database.mark_message_delivered_db, int(message_id))
+        marked = await asyncio.to_thread(database.mark_message_delivered_db, int(message_id))
+        if not marked:
+            return
 
         await self._notify_user(sender, {
             "type": "message_status",
@@ -150,6 +165,10 @@ class ConnectionManager:
         partner = data.get("partner")
         up_to_message_id = data.get("up_to_message_id")
         if not reader or not partner or not up_to_message_id:
+            return
+
+        session = self.active_connections.get(websocket, {})
+        if session.get("active_chat") != partner:
             return
 
         await asyncio.to_thread(
@@ -270,16 +289,6 @@ class ConnectionManager:
             "message_id": saved_message["id"],
             "client_message_id": client_message_id,
         })
-
-        if target_websocket:
-            await self._send_json(sender_websocket, {
-                "type": "message_status",
-                "status": "delivered",
-                "message_id": saved_message["id"],
-                "client_message_id": client_message_id,
-                "partner": target_username,
-            })
-            await asyncio.to_thread(database.mark_message_delivered_db, saved_message["id"])
 
         if is_new_chat:
             partner_data = await asyncio.to_thread(database.get_user_db, target_username)

@@ -40,6 +40,17 @@ import {
     setRealtimeContext
 } from './ui.js';
 import { createRealtimeController } from './realtime.js';
+import {
+    MESSAGE_STATUS,
+    createOutgoingMessage,
+    deriveOutgoingStatusFromDb,
+} from './messageState.js';
+import {
+    applyStatusEvent,
+    onMessageAck,
+    scheduleReadReceipt,
+    cancelReadReceipt,
+} from './messageSync.js';
 import { connectToServer, sendPacket } from './network.js';
 import { 
     generateKeyPair, 
@@ -164,46 +175,14 @@ function handleNewChatEvent(data) {
     });
 }
 
-function handleMessageStatusEvent(data) {
-    const { status, client_message_id, message_id, partner, up_to_message_id } = data;
-
-    if (status === 'delivered' || status === 'read') {
-        updateOutgoingStatus(client_message_id, message_id, status, partner);
-    }
-
-    if (status === 'read' && partner) {
-        const messages = state.chatHistory[partner] || [];
-        messages.forEach(msg => {
-            if (msg.type === 'outgoing' && msg.id && up_to_message_id && msg.id <= up_to_message_id) {
-                msg.status = 'read';
-                updateMessageStatus(msg.clientMessageId, msg.id, 'read');
-            }
-        });
-        saveHistory(state.myUsername, state.chatHistory);
-    }
+function saveChatHistory() {
+    saveHistory(state.myUsername, state.chatHistory);
 }
 
-function updateOutgoingStatus(clientMessageId, messageId, status, partnerHint = null) {
-    let message = null;
-    const partners = partnerHint ? [partnerHint] : Object.keys(state.chatHistory);
-
-    for (const partner of partners) {
-        const found = (state.chatHistory[partner] || []).find(item =>
-            (clientMessageId && item.clientMessageId === clientMessageId) ||
-            (messageId && String(item.id) === String(messageId))
-        );
-        if (found) {
-            message = found;
-            break;
-        }
-    }
-
-    if (!message) return;
-
-    message.status = status;
-    message.pending = false;
-    saveHistory(state.myUsername, state.chatHistory);
-    updateMessageStatus(message.clientMessageId, message.id, status);
+function sendChatFocus(partner) {
+    const socket = getSocket();
+    if (!socket) return;
+    sendPacket(socket, 'chat_focus', { partner: partner || null });
 }
 
 function markActiveChatRead() {
@@ -211,12 +190,13 @@ function markActiveChatRead() {
     if (!partner) return;
 
     ensureRealtime().clearUnread(partner);
+    sendChatFocus(partner);
 
-    const messages = state.chatHistory[partner] || [];
-    const lastWithId = [...messages].reverse().find(msg => msg.id);
-    if (lastWithId?.id) {
-        ensureRealtime().sendReadReceipt(partner, lastWithId.id);
-    }
+    scheduleReadReceipt(
+        partner,
+        (p, upToId) => ensureRealtime().sendReadReceipt(p, upToId),
+        (p) => state.chatHistory[p]
+    );
 }
 
 applyPreferences(state.preferences);
@@ -244,6 +224,8 @@ async function handleNavigation(view, param) {
             switchChat(targetUser);
         } else {
             state.currentTargetUser = null;
+            sendChatFocus(null);
+            cancelReadReceipt();
             resetChatPanel();
             DOM.chatWelcome.classList.remove('hidden');
         }
@@ -364,6 +346,9 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 username: state.myUsername,
                 public_key: exportedPublicKeyJSON
             });
+            if (state.currentTargetUser) {
+                sendPacket(activeSocket, "chat_focus", { partner: state.currentTargetUser });
+            }
         },
         async (event) => {
             const data = JSON.parse(event.data);
@@ -408,24 +393,32 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
 
                 if (data.id) {
                     ensureRealtime().sendDeliveryAck(data.from, data.id, data.client_message_id);
-                }
-                if (isActiveChat) {
-                    markActiveChatRead();
+                    if (isActiveChat) {
+                        markActiveChatRead();
+                    }
                 }
             }
             else if (data.type === "message_sync") {
-                markMessageSynced(data.client_message_id, data.id, data.timestamp);
-                if (state.currentTargetUser === data.from && data.id) {
-                    ensureRealtime().sendDeliveryAck(data.from, data.id, data.client_message_id);
+                const partner = data.from;
+                const messages = state.chatHistory[partner] || [];
+                const target = messages.find(m => m.clientMessageId === data.client_message_id);
+
+                if (target && data.id) {
+                    target.id = data.id;
+                    if (data.timestamp) target.timestamp = data.timestamp;
+                    saveChatHistory();
+                }
+
+                if (state.currentTargetUser === partner && data.id) {
+                    ensureRealtime().sendDeliveryAck(partner, data.id, data.client_message_id);
                     markActiveChatRead();
                 }
             }
             else if (data.type === "message_ack") {
-                markMessageSynced(data.client_message_id, data.id, data.timestamp);
-                updateOutgoingStatus(data.client_message_id, data.id, 'sent');
+                onMessageAck(state.chatHistory, data, saveChatHistory);
             }
             else if (data.type === "message_status") {
-                handleMessageStatusEvent(data);
+                applyStatusEvent(state.chatHistory, data, saveChatHistory);
             }
             else if (data.type === "unread_sync") {
                 ensureRealtime().setUnread(data.partner, data.unread_count);
@@ -459,8 +452,8 @@ function processMessage(chatPartner, messageInput) {
         text: messageInput.text,
         type: messageInput.type,
         timestamp: messageInput.timestamp || Date.now(),
-        pending: Boolean(messageInput.pending),
-        status: messageInput.status || (messageInput.pending ? 'sending' : messageInput.type === 'outgoing' ? 'sent' : undefined),
+        status: messageInput.status || (messageInput.type === 'outgoing' ? MESSAGE_STATUS.SENT : undefined),
+        pending: messageInput.status === MESSAGE_STATUS.PENDING || messageInput.status === MESSAGE_STATUS.SENDING,
     };
 
     state.chatHistory[chatPartner].push(message);
@@ -471,24 +464,6 @@ function processMessage(chatPartner, messageInput) {
         appendMessage(message, null, null, null, prev);
     }
     saveHistory(state.myUsername, state.chatHistory);
-}
-
-function markMessageSynced(clientMessageId, messageId, timestamp) {
-    if (!clientMessageId) return;
-
-    let message = null;
-    for (const messages of Object.values(state.chatHistory)) {
-        message = messages.find(item => item.clientMessageId === clientMessageId);
-        if (message) break;
-    }
-    if (!message) return;
-
-    message.id = messageId;
-    message.timestamp = timestamp || message.timestamp;
-    message.pending = false;
-    message.status = message.status || 'sent';
-    saveHistory(state.myUsername, state.chatHistory);
-    updateMessageIdentity(clientMessageId, messageId, timestamp);
 }
 
 async function ensureUserKey(username) {
@@ -521,10 +496,12 @@ async function switchChat(username) {
     }
 
     persistCurrentDraft();
+    cancelReadReceipt();
     state.currentTargetUser = username;
-    activateChatPanel(username); 
-    DOM.chatWelcome.classList.add('hidden'); 
-    DOM.messagesDiv.innerHTML = ""; 
+    sendChatFocus(username);
+    activateChatPanel(username);
+    DOM.chatWelcome.classList.add('hidden');
+    DOM.messagesDiv.innerHTML = "";
 
     // --- SECURE LAZY CLOUD SYNCHRONIZATION ---
     // Fetch latest 50 messages slice. Server doesn't know plain text content!
@@ -539,6 +516,9 @@ async function switchChat(username) {
 
             try {
                 const decryptedText = await decryptMessage(state.myKeys.privateKey, encryptedBytes);
+                const outgoingStatus = isMe
+                    ? deriveOutgoingStatusFromDb(msg, state.myUsername)
+                    : undefined;
                 state.chatHistory[username].push({
                     id: msg.id,
                     clientMessageId: msg.client_message_id,
@@ -546,7 +526,8 @@ async function switchChat(username) {
                     text: decryptedText,
                     type: isMe ? "outgoing" : "incoming",
                     timestamp: msg.timestamp || Date.now(),
-                    pending: false
+                    status: outgoingStatus,
+                    pending: false,
                 });
             } catch (cryptoErr) {
                 console.error("🔒 Crypto payload corruption block dropped:", cryptoErr);
@@ -609,6 +590,12 @@ async function handleSendMessage() {
         });
 
         if (!sent) {
+            const failed = createOutgoingMessage({
+                clientMessageId,
+                text,
+                status: MESSAGE_STATUS.FAILED,
+            });
+            processMessage(state.currentTargetUser, failed);
             throw new Error("WebSocket is not connected");
         }
 
@@ -617,15 +604,11 @@ async function handleSendMessage() {
             last_message_at: new Date().toISOString(),
         });
 
-        processMessage(state.currentTargetUser, {
+        processMessage(state.currentTargetUser, createOutgoingMessage({
             clientMessageId,
-            sender: "You",
             text,
-            type: "outgoing",
-            timestamp: Date.now(),
-            pending: true,
-            status: 'sending',
-        });
+            status: MESSAGE_STATUS.SENDING,
+        }));
         clearDraft(state.myUsername, state.currentTargetUser);
         clearComposer();
         setDraftStatus("Message queued. Waiting for database sync.");
@@ -954,6 +937,8 @@ function handleLogout() {
     state.onlineUsers = new Set();
     state.unreadCounts = {};
     state.typingUsers = new Set();
+    cancelReadReceipt();
+    sendChatFocus(null);
     realtime?.reset();
     realtime = null;
 
