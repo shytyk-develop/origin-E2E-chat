@@ -254,13 +254,18 @@
 }
 
 #messageInput {
-    line-height: 1.35;
+    align-content: center;
+    line-height: 20px;
     max-height: 132px;
     min-height: 42px;
     overflow-y: auto;
     padding-bottom: 11px;
     padding-top: 11px;
     resize: none;
+}
+
+#messageInput::placeholder {
+    line-height: 20px;
 }
 
 .composer-popover {

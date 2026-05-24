@@ -238,7 +238,7 @@ function buildMessageElement(message, previousMessage = null) {
 
     const row = document.createElement('div');
     row.className = [
-        'message-row group flex w-full flex-col',
+        'message-row group flex w-full max-w-full flex-col',
         isOutgoing ? 'items-end' : 'items-start',
         isGrouped ? 'mt-0.5' : 'mt-2.5',
     ].join(' ');
@@ -256,36 +256,50 @@ function buildMessageElement(message, previousMessage = null) {
         row.append(nameEl);
     }
 
-    const line = document.createElement('div');
-    line.className = [
-        'flex max-w-[min(78%,22rem)] items-end gap-1.5',
+    const shell = document.createElement('div');
+    shell.className = [
+        'relative flex max-w-[min(100%,32rem)]',
         isOutgoing ? 'flex-row-reverse' : 'flex-row',
+        'items-center gap-1',
     ].join(' ');
 
     const bubble = document.createElement('div');
     bubble.className = [
-        'message-bubble max-w-full break-words px-2.5 py-1.5 text-[13px] leading-snug shadow-sm',
+        'message-bubble inline-flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-0.5',
+        'px-3 py-1.5 text-[13px] leading-snug shadow-sm',
+        isOutgoing ? 'justify-end' : 'justify-start',
         isOutgoing
-            ? 'rounded-2xl rounded-br-md bg-[#2b5278] text-zinc-100'
-            : 'rounded-2xl rounded-bl-md border border-white/5 bg-[#182533] text-zinc-100',
+            ? 'rounded-2xl rounded-br-sm bg-[#2b5278] text-zinc-100'
+            : 'rounded-2xl rounded-bl-sm border border-white/5 bg-[#182533] text-zinc-100',
         message.pending ? 'opacity-70' : '',
     ].join(' ');
-    bubble.textContent = message.text;
+
+    const textEl = document.createElement('span');
+    textEl.className = 'message-text min-w-0 break-words';
+    textEl.textContent = message.text;
+
+    const meta = document.createElement('span');
+    meta.className = [
+        'message-meta inline-flex shrink-0 items-center gap-1 whitespace-nowrap',
+        'text-[10px] leading-none tabular-nums',
+        isOutgoing ? 'text-zinc-300/80' : 'text-zinc-500',
+    ].join(' ');
 
     const timeEl = document.createElement('span');
-    timeEl.className = 'message-time shrink-0 pb-0.5 text-[10px] tabular-nums text-zinc-500';
+    timeEl.className = 'message-time';
     timeEl.textContent = formatMessageTime(new Date(message.timestamp || Date.now()));
-
-    line.append(bubble, timeEl);
+    meta.append(timeEl);
 
     if (isOutgoing) {
         const statusEl = document.createElement('span');
         statusEl.dataset.messageStatus = 'true';
-        statusEl.className = `shrink-0 pb-0.5 ${formatMessageStatusClasses(message.status, message.pending)}`;
+        statusEl.className = formatMessageStatusClasses(message.status, message.pending);
         statusEl.textContent = formatMessageStatusIcon(message.status, message.pending);
         statusEl.title = formatMessageStatusTitle(message.status, message.pending);
-        line.append(statusEl);
+        meta.append(statusEl);
     }
+
+    bubble.append(textEl, meta);
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -301,9 +315,9 @@ function buildMessageElement(message, previousMessage = null) {
         if (!message.id) return;
         messageActionHandlers.onDeleteMessage?.(message.id);
     });
-    line.append(deleteBtn);
 
-    row.append(line);
+    shell.append(bubble, deleteBtn);
+    row.append(shell);
     return row;
 }
 
@@ -358,7 +372,7 @@ export function updateMessageStatus(clientMessageId, messageId, status) {
 
     statusElement.textContent = formatMessageStatusIcon(status, false);
     statusElement.title = formatMessageStatusTitle(status, false);
-    statusElement.className = `shrink-0 pb-0.5 ${formatMessageStatusClasses(status, false)}`;
+    statusElement.className = formatMessageStatusClasses(status, false);
 }
 
 export function removeMessageElement(messageId) {
@@ -397,8 +411,11 @@ export function focusContactSearch() {
 }
 
 export function autoResizeComposer() {
+    const minHeight = 42;
+    const maxHeight = 132;
     DOM.messageInput.style.height = 'auto';
-    DOM.messageInput.style.height = `${Math.min(DOM.messageInput.scrollHeight, 132)}px`;
+    const nextHeight = Math.min(Math.max(DOM.messageInput.scrollHeight, minHeight), maxHeight);
+    DOM.messageInput.style.height = `${nextHeight}px`;
 }
 
 export function updateComposerMeta(text) {
