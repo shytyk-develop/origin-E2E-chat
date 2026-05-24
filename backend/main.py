@@ -145,10 +145,11 @@ async def get_user(username: str, authorization: Optional[str] = Header(default=
 @app.delete("/api/history/message/{message_id}")
 async def delete_message(message_id: int, authorization: Optional[str] = Header(default=None)):
     current_username = get_current_username(authorization)
-    deleted = database.delete_chat_message_db(current_username, message_id)
-    if not deleted:
+    metadata = database.delete_chat_message_db(current_username, message_id)
+    if not metadata:
         raise HTTPException(status_code=404, detail="Message not found")
-    return {"deleted": True}
+    await manager.notify_message_deleted(metadata)
+    return {"deleted": True, **metadata}
 
 @app.delete("/api/history/conversation/{partner}")
 async def delete_conversation(partner: str, authorization: Optional[str] = Header(default=None)):
@@ -157,6 +158,7 @@ async def delete_conversation(partner: str, authorization: Optional[str] = Heade
     validate_username(normalized_partner)
 
     deleted_count = database.delete_conversation_db(current_username, normalized_partner)
+    await manager.notify_conversation_deleted(current_username, normalized_partner)
     return {"deleted": True, "count": deleted_count}
 
 # --- SECURE WEBSOCKET FOR ROUTING MESSAGES ---

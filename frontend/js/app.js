@@ -36,6 +36,7 @@ import {
     updateMessageIdentity,
     updateMessageStatus,
     removeMessageElement,
+    removeMessageFromDom,
     setMessageActionHandlers,
     setRealtimeContext
 } from './ui.js';
@@ -51,6 +52,7 @@ import {
     scheduleReadReceipt,
     cancelReadReceipt,
 } from './messageSync.js';
+import { applyMessageDeleted, applyConversationDeleted } from './messageDelete.js';
 import { connectToServer, sendPacket } from './network.js';
 import { 
     generateKeyPair, 
@@ -177,6 +179,34 @@ function handleNewChatEvent(data) {
 
 function saveChatHistory() {
     saveHistory(state.myUsername, state.chatHistory);
+}
+
+function handleMessageDeletedEvent(data) {
+    const partner = data.partner || data.chat_id;
+    const { changed } = applyMessageDeleted(state.chatHistory, data, saveChatHistory);
+    if (!changed) return;
+
+    if (state.currentTargetUser === partner) {
+        removeMessageFromDom({
+            messageId: data.message_id,
+            clientMessageId: data.client_message_id,
+        });
+    }
+}
+
+function handleConversationDeletedEvent(data) {
+    const partner = data.partner || data.chat_id;
+    if (!partner) return;
+
+    applyConversationDeleted(state.chatHistory, data, saveChatHistory);
+    state.sidebarChats = state.sidebarChats.filter((chat) => chat.username !== partner);
+
+    if (state.currentTargetUser === partner) {
+        DOM.messagesDiv.innerHTML = "";
+        clearDraft(state.myUsername, partner);
+    }
+
+    renderSidebar();
 }
 
 function sendChatFocus(partner) {
@@ -422,6 +452,12 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
             }
             else if (data.type === "unread_sync") {
                 ensureRealtime().setUnread(data.partner, data.unread_count);
+            }
+            else if (data.type === "message_deleted") {
+                handleMessageDeletedEvent(data);
+            }
+            else if (data.type === "conversation_deleted") {
+                handleConversationDeletedEvent(data);
             }
         },
         (event, closedByUser) => {
@@ -900,15 +936,28 @@ async function deleteSingleMessage(messageId) {
         return;
     }
 
+    const partner = state.currentTargetUser;
+    const snapshot = [...(state.chatHistory[partner] || [])];
+    const targetMsg = snapshot.find((m) => String(m.id) === String(messageId));
+    const clientMessageId = targetMsg?.clientMessageId;
+
+    applyMessageDeleted(
+        state.chatHistory,
+        { message_id: messageId, client_message_id: clientMessageId, partner },
+        saveChatHistory
+    );
+    removeMessageFromDom({ messageId, clientMessageId });
+
     try {
         await deleteMessage(state.token, messageId);
-        const messages = state.chatHistory[state.currentTargetUser] || [];
-        state.chatHistory[state.currentTargetUser] = messages.filter(message => String(message.id) !== String(messageId));
-        saveHistory(state.myUsername, state.chatHistory);
-        removeMessageElement(messageId);
         showToast("Message deleted from database.", "success");
     } catch (err) {
         console.error("Message delete failed:", err);
+        state.chatHistory[partner] = snapshot;
+        saveChatHistory();
+        if (state.currentTargetUser === partner) {
+            renderMessagesList(snapshot);
+        }
         showToast(err.message || "Could not delete message.", "error");
     } finally {
         focusComposer();

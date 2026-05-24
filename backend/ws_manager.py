@@ -118,6 +118,36 @@ class ConnectionManager:
             await self.disconnect(ws)
             return False
 
+    async def notify_message_deleted(self, metadata: dict):
+        """Push message_deleted to both conversation participants (all tabs via WS)."""
+        partner = metadata.get("partner") or metadata.get("chat_id")
+        deleted_by = metadata.get("deleted_by")
+        if not partner or not deleted_by:
+            return
+
+        payload = {
+            "type": "message_deleted",
+            "message_id": metadata.get("message_id"),
+            "chat_id": partner,
+            "partner": partner,
+            "deleted_by": deleted_by,
+            "client_message_id": metadata.get("client_message_id"),
+            "deleted_at": metadata.get("deleted_at"),
+            "deleted_for_everyone": metadata.get("deleted_for_everyone", True),
+        }
+        for username in {deleted_by, partner}:
+            await self._notify_user(username, payload)
+
+    async def notify_conversation_deleted(self, deleted_by: str, partner: str):
+        payload = {
+            "type": "conversation_deleted",
+            "chat_id": partner,
+            "partner": partner,
+            "deleted_by": deleted_by,
+        }
+        for username in {deleted_by, partner}:
+            await self._notify_user(username, payload)
+
     async def handle_typing(self, data: dict, websocket: WebSocket):
         sender = self._session_username(websocket)
         target = data.get("to")

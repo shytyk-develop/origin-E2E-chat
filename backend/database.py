@@ -8,6 +8,7 @@ import os
 import bcrypt
 from dotenv import load_dotenv
 from typing import Optional
+from datetime import datetime, timezone
 
 # Load variables from .env (for local development)
 load_dotenv()
@@ -526,26 +527,46 @@ def save_chat_history_message(sender: str, receiver: str, content_recipient: lis
     finally:
         release_connection(conn)
 
-def delete_chat_message_db(username: str, message_id: int) -> bool:
-    """Deletes one stored chat message if the requesting user is a participant."""
+def delete_chat_message_db(username: str, message_id: int) -> Optional[dict]:
+    """Deletes one chat message if the user is a participant. Returns metadata for WS sync."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            DELETE FROM chat_history
+            SELECT id, sender, receiver, client_message_id
+            FROM chat_history
             WHERE id = %s
               AND (sender = %s OR receiver = %s)
         ''', (message_id, username, username))
-        deleted = cursor.rowcount > 0
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        msg_id, sender, receiver, client_message_id = row
+        partner = receiver if sender == username else sender
+
+        cursor.execute('''
+            DELETE FROM chat_history
+            WHERE id = %s
+        ''', (msg_id,))
 
         cursor.execute('''
             DELETE FROM offline_messages
             WHERE chat_history_id = %s
               AND (sender = %s OR receiver = %s)
-        ''', (message_id, username, username))
+        ''', (msg_id, username, username))
 
         conn.commit()
-        return deleted
+        deleted_at = datetime.now(timezone.utc).isoformat()
+        return {
+            "message_id": msg_id,
+            "chat_id": partner,
+            "partner": partner,
+            "deleted_by": username,
+            "client_message_id": client_message_id,
+            "deleted_at": deleted_at,
+            "deleted_for_everyone": True,
+        }
     except Exception as e:
         conn.rollback()
         raise e

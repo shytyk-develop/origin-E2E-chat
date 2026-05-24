@@ -393,8 +393,21 @@ function applyPendingVisual(row, status) {
 }
 
 export function removeMessageElement(messageId) {
+    if (messageId == null) return;
     const msgElement = DOM.messagesDiv.querySelector(`[data-message-id="${CSS.escape(String(messageId))}"]`);
     msgElement?.remove();
+}
+
+export function removeMessageFromDom({ messageId, clientMessageId } = {}) {
+    if (messageId != null) {
+        removeMessageElement(messageId);
+    }
+    if (clientMessageId) {
+        const byClient = DOM.messagesDiv.querySelector(
+            `[data-client-message-id="${CSS.escape(clientMessageId)}"]`
+        );
+        byClient?.remove();
+    }
 }
 
 export function setMessageActionHandlers(handlers) {
