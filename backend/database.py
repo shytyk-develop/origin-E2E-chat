@@ -562,6 +562,8 @@ def delete_chat_message_db(username: str, message_id: int) -> Optional[dict]:
             "message_id": msg_id,
             "chat_id": partner,
             "partner": partner,
+            "sender": sender,
+            "receiver": receiver,
             "deleted_by": username,
             "client_message_id": client_message_id,
             "deleted_at": deleted_at,

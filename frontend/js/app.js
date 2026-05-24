@@ -52,7 +52,14 @@ import {
     scheduleReadReceipt,
     cancelReadReceipt,
 } from './messageSync.js';
-import { applyMessageDeleted, applyConversationDeleted } from './messageDelete.js';
+import {
+    applyMessageDeleted,
+    applyConversationDeleted,
+    activeChatShouldRefresh,
+    logDelete,
+    messageMatchesDeletion,
+    resolveDeletionChatPartner,
+} from './messageDelete.js';
 import { connectToServer, sendPacket } from './network.js';
 import { 
     generateKeyPair, 
@@ -182,28 +189,73 @@ function saveChatHistory() {
 }
 
 function handleMessageDeletedEvent(data) {
-    const partner = data.partner || data.chat_id;
-    const { changed } = applyMessageDeleted(state.chatHistory, data, saveChatHistory);
-    if (!changed) return;
+    console.log('[WS RECEIVED]', data);
 
-    if (state.currentTargetUser === partner) {
-        removeMessageFromDom({
+    const chatPartner = resolveDeletionChatPartner(data, state.myUsername);
+    const activeChat = state.currentTargetUser;
+    const deletion = {
+        messageId: data.message_id,
+        clientMessageId: data.client_message_id,
+    };
+
+    const messagesBefore = activeChat ? [...(state.chatHistory[activeChat] || [])] : [];
+    const foundMessage = messagesBefore.find((m) => messageMatchesDeletion(m, deletion));
+    const shouldRerender =
+        Boolean(foundMessage) ||
+        activeChatShouldRefresh(activeChat, data, state.chatHistory, state.myUsername);
+
+    logDelete('[CURRENT CHAT]', activeChat);
+    logDelete('[RESOLVED CHAT PARTNER]', chatPartner);
+    logDelete('[MESSAGE FOUND in active chat]', Boolean(foundMessage));
+
+    const { changed, partner: affectedKey } = applyMessageDeleted(
+        state.chatHistory,
+        data,
+        saveChatHistory,
+        state.myUsername
+    );
+
+    if (shouldRerender && activeChat) {
+        const messagesAfter = state.chatHistory[activeChat] || [];
+        renderMessagesList(messagesAfter);
+        logDelete('[UI RERENDERED]', { activeChat, count: messagesAfter.length });
+    } else if (changed) {
+        const domFound = removeMessageFromDom({
             messageId: data.message_id,
             clientMessageId: data.client_message_id,
         });
+        logDelete('[DOM ELEMENT FOUND]', domFound);
+    }
+
+    if (!changed && !foundMessage) {
+        logDelete('[SKIP] no store change and message not in active chat');
+    } else {
+        logDelete('[STATE UPDATED]', { changed, affectedKey });
     }
 }
 
 function handleConversationDeletedEvent(data) {
-    const partner = data.partner || data.chat_id;
-    if (!partner) return;
+    console.log('[WS RECEIVED]', data);
 
-    applyConversationDeleted(state.chatHistory, data, saveChatHistory);
-    state.sidebarChats = state.sidebarChats.filter((chat) => chat.username !== partner);
+    const chatPartner = resolveDeletionChatPartner(
+        {
+            ...data,
+            sender: data.deleted_by,
+            receiver: data.partner || data.chat_id,
+        },
+        state.myUsername
+    );
+    if (!chatPartner) return;
 
-    if (state.currentTargetUser === partner) {
+    applyConversationDeleted(state.chatHistory, data, saveChatHistory, state.myUsername);
+    state.sidebarChats = state.sidebarChats.filter(
+        (chat) => normalizeUsername(chat.username) !== chatPartner
+    );
+
+    if (state.currentTargetUser && normalizeUsername(state.currentTargetUser) === chatPartner) {
         DOM.messagesDiv.innerHTML = "";
-        clearDraft(state.myUsername, partner);
+        clearDraft(state.myUsername, state.currentTargetUser);
+        logDelete('[UI CLEARED conversation]', chatPartner);
     }
 
     renderSidebar();
@@ -454,6 +506,7 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 ensureRealtime().setUnread(data.partner, data.unread_count);
             }
             else if (data.type === "message_deleted") {
+                console.log('[WS RECEIVED] message_deleted', data);
                 handleMessageDeletedEvent(data);
             }
             else if (data.type === "conversation_deleted") {
@@ -941,12 +994,19 @@ async function deleteSingleMessage(messageId) {
     const targetMsg = snapshot.find((m) => String(m.id) === String(messageId));
     const clientMessageId = targetMsg?.clientMessageId;
 
-    applyMessageDeleted(
-        state.chatHistory,
-        { message_id: messageId, client_message_id: clientMessageId, partner },
-        saveChatHistory
-    );
-    removeMessageFromDom({ messageId, clientMessageId });
+    const optimisticEvent = {
+        message_id: messageId,
+        client_message_id: clientMessageId,
+        partner,
+        deleted_by: state.myUsername,
+        sender: state.myUsername,
+        receiver: partner,
+    };
+
+    applyMessageDeleted(state.chatHistory, optimisticEvent, saveChatHistory, state.myUsername);
+    if (state.currentTargetUser === partner) {
+        renderMessagesList(state.chatHistory[partner] || []);
+    }
 
     try {
         await deleteMessage(state.token, messageId);

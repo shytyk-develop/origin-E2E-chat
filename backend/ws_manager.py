@@ -130,6 +130,8 @@ class ConnectionManager:
             "message_id": metadata.get("message_id"),
             "chat_id": partner,
             "partner": partner,
+            "sender": metadata.get("sender"),
+            "receiver": metadata.get("receiver"),
             "deleted_by": deleted_by,
             "client_message_id": metadata.get("client_message_id"),
             "deleted_at": metadata.get("deleted_at"),

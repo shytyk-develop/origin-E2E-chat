@@ -399,15 +399,26 @@ export function removeMessageElement(messageId) {
 }
 
 export function removeMessageFromDom({ messageId, clientMessageId } = {}) {
+    let found = false;
     if (messageId != null) {
-        removeMessageElement(messageId);
+        const el = DOM.messagesDiv.querySelector(
+            `[data-message-id="${CSS.escape(String(messageId))}"]`
+        );
+        if (el) {
+            el.remove();
+            found = true;
+        }
     }
     if (clientMessageId) {
         const byClient = DOM.messagesDiv.querySelector(
             `[data-client-message-id="${CSS.escape(clientMessageId)}"]`
         );
-        byClient?.remove();
+        if (byClient) {
+            byClient.remove();
+            found = true;
+        }
     }
+    return found;
 }
 
 export function setMessageActionHandlers(handlers) {
