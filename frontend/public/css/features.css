@@ -70,7 +70,7 @@
 
 .contact-search-input,
 .message-search-panel input {
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--surface);
     border: 1px solid var(--b1);
     border-radius: var(--r2);
     color: var(--t1);
@@ -88,7 +88,7 @@
 
 .contact-search-input:focus,
 .message-search-panel input:focus {
-    background: rgba(0, 0, 0, 0.55);
+    background: var(--surface-elevated);
     border-color: var(--b2);
     box-shadow: 0 0 0 3px var(--accent-10);
 }
@@ -179,7 +179,7 @@
 
 .message-search-panel {
     align-items: center;
-    background: rgba(2, 2, 4, 0.88);
+    background: var(--glass);
     border-bottom: 1px solid var(--b0);
     display: flex;
     flex-shrink: 0;
@@ -211,9 +211,7 @@
     outline-offset: 2px;
 }
 
-.message-row.is-pending .message-bubble {
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
+/* pending bubble ring — ventura-theme.css */
 
 .message-actions {
     display: flex;
@@ -255,17 +253,9 @@
 
 #messageInput {
     align-content: center;
-    line-height: 20px;
     max-height: 132px;
-    min-height: 42px;
     overflow-y: auto;
-    padding-bottom: 11px;
-    padding-top: 11px;
     resize: none;
-}
-
-#messageInput::placeholder {
-    line-height: 20px;
 }
 
 .composer-popover {
@@ -276,7 +266,7 @@
 }
 
 .ui-backdrop {
-    background: rgba(2, 2, 4, 0.64);
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
     inset: 0;
     position: fixed;
     z-index: 90;

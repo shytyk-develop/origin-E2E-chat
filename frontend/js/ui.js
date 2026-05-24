@@ -56,6 +56,7 @@ export const DOM = {
     prefEnterSend: document.getElementById('uiPrefEnterSend'),
     prefCompactMode: document.getElementById('uiPrefCompactMode'),
     prefShowTimestamps: document.getElementById('uiPrefShowTimestamps'),
+    themePicker: document.getElementById('uiThemePicker'),
 
     shortcutsPanel: document.getElementById('uiShortcutsPanel'),
     closeShortcutsBtn: document.getElementById('uiCloseShortcutsBtn'),
@@ -238,10 +239,10 @@ function buildMessageElement(message, previousMessage = null) {
 
     const row = document.createElement('div');
     row.className = [
-        'message-row group flex w-full max-w-full flex-col',
-        isOutgoing ? 'items-end' : 'items-start',
-        isGrouped ? 'mt-0.5' : 'mt-2.5',
-    ].join(' ');
+        'message-row group',
+        isOutgoing ? 'message-row--own' : 'message-row--other',
+        isGrouped ? 'message-row--grouped' : '',
+    ].join(' ').trim();
     row.dataset.messageType = message.type;
     row.dataset.messageSender = message.sender || '';
 
@@ -254,26 +255,18 @@ function buildMessageElement(message, previousMessage = null) {
 
     if (showSenderName) {
         const nameEl = document.createElement('div');
-        nameEl.className = 'mb-0.5 px-1 text-[11px] font-medium text-indigo-400/90';
+        nameEl.className = 'message-sender-label';
         nameEl.textContent = message.sender;
         row.append(nameEl);
     }
 
     const shell = document.createElement('div');
-    shell.className = [
-        'relative flex max-w-[min(100%,32rem)]',
-        isOutgoing ? 'flex-row-reverse' : 'flex-row',
-        'items-center gap-1',
-    ].join(' ');
+    shell.className = 'message-shell';
 
     const bubble = document.createElement('div');
     bubble.className = [
-        'message-bubble inline-flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-0.5',
-        'px-3 py-1.5 text-[13px] leading-snug shadow-sm',
-        isOutgoing ? 'justify-end' : 'justify-start',
-        isOutgoing
-            ? 'rounded-2xl rounded-br-sm bg-[#2b5278] text-zinc-100'
-            : 'rounded-2xl rounded-bl-sm border border-white/5 bg-[#182533] text-zinc-100',
+        'message-bubble',
+        isOutgoing ? 'message-bubble--own' : 'message-bubble--other',
     ].join(' ');
 
     const textEl = document.createElement('span');
@@ -281,11 +274,7 @@ function buildMessageElement(message, previousMessage = null) {
     textEl.textContent = message.text;
 
     const meta = document.createElement('span');
-    meta.className = [
-        'message-meta inline-flex shrink-0 items-center gap-1 whitespace-nowrap',
-        'text-[10px] leading-none tabular-nums',
-        isOutgoing ? 'text-zinc-300/80' : 'text-zinc-500',
-    ].join(' ');
+    meta.className = 'message-meta';
 
     const timeEl = document.createElement('span');
     timeEl.className = 'message-time';
@@ -294,8 +283,8 @@ function buildMessageElement(message, previousMessage = null) {
 
     if (isOutgoing) {
         const statusEl = document.createElement('span');
-        statusEl.dataset.messageStatus = 'true';
-        statusEl.className = formatMessageStatusClasses(status, false);
+        statusEl.className = 'message-status';
+        statusEl.dataset.status = status || 'sent';
         statusEl.textContent = formatMessageStatusIcon(status, false);
         statusEl.title = formatMessageStatusTitle(status, false);
         meta.append(statusEl);
@@ -305,11 +294,7 @@ function buildMessageElement(message, previousMessage = null) {
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
-    deleteBtn.className = [
-        'message-action-btn shrink-0 rounded px-1.5 py-0.5 text-[10px] text-red-400/80',
-        'opacity-0 transition-opacity group-hover:opacity-100',
-        'hover:bg-red-500/10 hover:text-red-300',
-    ].join(' ');
+    deleteBtn.className = 'message-action-btn';
     deleteBtn.textContent = '×';
     deleteBtn.disabled = !message.id;
     deleteBtn.title = message.id ? 'Delete message' : 'Waiting for sync';
@@ -373,23 +358,17 @@ export function updateMessageStatus(clientMessageId, messageId, status) {
     msgElement.dataset.messageStatus = status;
     applyPendingVisual(msgElement, status);
 
-    const statusElement = msgElement.querySelector('[data-message-status]');
+    const statusElement = msgElement.querySelector('.message-status');
     if (!statusElement) return;
 
+    statusElement.dataset.status = status;
     statusElement.textContent = formatMessageStatusIcon(status, false);
     statusElement.title = formatMessageStatusTitle(status, false);
-    statusElement.className = formatMessageStatusClasses(status, false);
 }
 
 function applyPendingVisual(row, status) {
     const isPending = status === 'pending' || status === 'sending';
     row.classList.toggle('is-pending', isPending);
-
-    const bubble = row.querySelector('.message-bubble');
-    if (bubble) {
-        bubble.classList.toggle('ring-1', isPending);
-        bubble.classList.toggle('ring-white/10', isPending);
-    }
 }
 
 export function removeMessageElement(messageId) {
@@ -567,6 +546,12 @@ export function setPreferenceControls(preferences) {
     DOM.prefEnterSend.checked = preferences.enterToSend;
     DOM.prefCompactMode.checked = preferences.compactMode;
     DOM.prefShowTimestamps.checked = preferences.showTimestamps;
+
+    if (DOM.themePicker) {
+        DOM.themePicker.querySelectorAll('[data-theme-value]').forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.themeValue === preferences.theme);
+        });
+    }
 }
 
 export function setChatToolsEnabled(isEnabled) {
@@ -814,12 +799,3 @@ function formatMessageStatusTitle(status) {
     return '';
 }
 
-function formatMessageStatusClasses(status) {
-    const base = 'text-[11px] leading-none';
-    if (status === 'pending' || status === 'sending') return `${base} text-zinc-400 animate-pulse`;
-    if (status === 'failed') return `${base} text-red-400`;
-    if (status === 'read') return `${base} text-emerald-400`;
-    if (status === 'delivered') return `${base} text-zinc-400`;
-    if (status === 'sent') return `${base} text-zinc-500`;
-    return `${base} text-zinc-500`;
-}

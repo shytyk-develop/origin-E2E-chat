@@ -3,8 +3,33 @@ const STORAGE_KEY = 'originhub_ui_preferences';
 export const DEFAULT_PREFERENCES = {
     enterToSend: true,
     compactMode: false,
-    showTimestamps: true
+    showTimestamps: true,
+    theme: 'system', // 'light' | 'dark' | 'system'
 };
+
+let systemThemeListener = null;
+
+function resolveThemePreference(theme) {
+    if (theme === 'light' || theme === 'dark') return theme;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+export function applyTheme(themePreference) {
+    const resolved = resolveThemePreference(themePreference);
+    document.documentElement.setAttribute('data-theme', resolved);
+}
+
+function bindSystemThemeListener(themePreference) {
+    if (systemThemeListener) {
+        window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', systemThemeListener);
+        systemThemeListener = null;
+    }
+
+    if (themePreference !== 'system') return;
+
+    systemThemeListener = () => applyTheme('system');
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', systemThemeListener);
+}
 
 export function loadPreferences() {
     try {
@@ -23,6 +48,8 @@ export function savePreferences(preferences) {
 export function applyPreferences(preferences) {
     document.body.classList.toggle('ui-compact', preferences.compactMode);
     document.body.classList.toggle('ui-hide-times', !preferences.showTimestamps);
+    applyTheme(preferences.theme);
+    bindSystemThemeListener(preferences.theme);
 }
 
 export function updatePreference(preferences, key, value) {

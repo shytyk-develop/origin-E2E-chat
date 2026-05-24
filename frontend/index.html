@@ -9,41 +9,34 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/css/features.css">
+    <link rel="stylesheet" href="/css/ventura-theme.css">
+    <script>
+        (function () {
+            try {
+                var p = JSON.parse(localStorage.getItem('originhub_ui_preferences') || '{}');
+                var t = p.theme || 'system';
+                if (t === 'system') {
+                    t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-theme', t);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
     <style>
         *, *::before, *::after {
             box-sizing: border-box;
         }
 
         :root {
-            --void: #020204;
-            --surface: #07070d;
-            --panel: #0c0c14;
-            --card: #111119;
-            --hover: #18181f;
-            --active: #1e1e28;
-            --b0: rgba(255, 255, 255, 0.03);
-            --b1: rgba(255, 255, 255, 0.07);
-            --b2: rgba(255, 255, 255, 0.13);
-            --b3: rgba(255, 255, 255, 0.22);
-            --t1: #f0f0f5;
-            --t2: #8f8fa0;
-            --t3: #484858;
-            --t4: #2a2a38;
-            --accent: #6c6cff;
-            --accent-10: rgba(108, 108, 255, 0.10);
-            --accent-20: rgba(108, 108, 255, 0.20);
-            --green: #00e5a0;
-            --green-10: rgba(0, 229, 160, 0.10);
-            --green-20: rgba(0, 229, 160, 0.20);
-            --red: #ff6b6b;
-            --red-10: rgba(255, 60, 60, 0.08);
-            --red-20: rgba(255, 60, 60, 0.22);
-            --f-ui: "Syne", sans-serif;
-            --f-mono: "Space Mono", monospace;
-            --r1: 6px;
-            --r2: 10px;
-            --r3: 14px;
-            --r4: 18px;
+            /* Color tokens live in ventura-theme.css (data-theme light/dark) */
+            --f-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            --f-mono: ui-monospace, "SF Mono", Menlo, monospace;
+            --r1: 8px;
+            --r2: 12px;
+            --r3: 16px;
+            --r4: 20px;
         }
 
         html,
@@ -54,8 +47,8 @@
         }
 
         body {
-            background: var(--void);
-            color: var(--t1);
+            background: var(--bg);
+            color: var(--text);
             font-family: var(--f-ui);
             -webkit-font-smoothing: antialiased;
         }
@@ -92,7 +85,7 @@
 
         #page-login {
             align-items: center;
-            background: var(--void);
+            background: var(--bg);
             display: flex;
             height: 100%;
             justify-content: center;
@@ -556,7 +549,7 @@
         }
 
         .chat-main {
-            background: var(--void);
+            background: var(--bg);
             display: flex;
             flex: 1;
             flex-direction: column;
@@ -570,7 +563,7 @@
             flex: 1;
             flex-direction: column;
             margin: 0 auto;
-            max-width: 720px;
+            max-width: 860px;
             min-height: 0;
             position: relative;
             width: 100%;
@@ -594,8 +587,8 @@
 
         .chat-header {
             align-items: center;
-            background: rgba(2, 2, 4, 0.75);
-            backdrop-filter: blur(24px);
+            background: var(--glass);
+            backdrop-filter: blur(24px) saturate(180%);
             border-bottom: 1px solid var(--b0);
             display: flex;
             flex-shrink: 0;
@@ -673,8 +666,8 @@
 
         #chat-welcome {
             align-items: center;
-            background: rgba(2, 2, 4, 0.97);
-            backdrop-filter: blur(48px);
+            background: color-mix(in srgb, var(--bg) 90%, transparent);
+            backdrop-filter: blur(48px) saturate(160%);
             display: flex;
             flex-direction: column;
             inset: 0;
@@ -734,8 +727,8 @@
         }
 
         .input-bar {
-            background: rgba(2, 2, 4, 0.82);
-            backdrop-filter: blur(24px);
+            background: var(--glass);
+            backdrop-filter: blur(24px) saturate(180%);
             border-top: 1px solid var(--b0);
             flex-shrink: 0;
             padding: 14px 18px;
@@ -774,37 +767,7 @@
             color: var(--t2);
         }
 
-        #messageInput {
-            background: var(--card);
-            border: 1px solid var(--b1);
-            border-radius: var(--r2);
-            box-sizing: border-box;
-            color: var(--t1);
-            flex: 1;
-            font-family: var(--f-ui);
-            font-size: 13.5px;
-            line-height: 20px;
-            max-height: 132px;
-            min-height: 42px;
-            min-width: 0;
-            outline: none;
-            overflow-y: auto;
-            padding: 11px 16px;
-            resize: none;
-            transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
-            vertical-align: middle;
-        }
-
-        #messageInput::placeholder {
-            color: var(--t4);
-            line-height: 20px;
-        }
-
-        #messageInput:focus {
-            background: var(--hover);
-            border-color: var(--b2);
-            box-shadow: 0 0 0 3px var(--accent-10);
-        }
+        /* Composer — ventura-theme.css */
 
         #messageInput:disabled {
             cursor: not-allowed;
@@ -1131,6 +1094,14 @@
                 <input id="uiPrefShowTimestamps" type="checkbox">
                 <span>Show message timestamps</span>
             </label>
+            <div class="toggle-row" style="flex-direction: column; align-items: stretch; cursor: default;">
+                <p class="settings-label">Appearance</p>
+                <div id="uiThemePicker" class="theme-picker" role="group" aria-label="Theme">
+                    <button type="button" data-theme-value="light">Light</button>
+                    <button type="button" data-theme-value="dark">Dark</button>
+                    <button type="button" data-theme-value="system">Auto</button>
+                </div>
+            </div>
         </div>
     </section>
 

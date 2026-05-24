@@ -802,6 +802,16 @@ DOM.clearDraftBtn.addEventListener('click', () => {
 bindPreferenceToggle(DOM.prefEnterSend, 'enterToSend');
 bindPreferenceToggle(DOM.prefCompactMode, 'compactMode');
 bindPreferenceToggle(DOM.prefShowTimestamps, 'showTimestamps');
+
+if (DOM.themePicker) {
+    DOM.themePicker.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-theme-value]');
+        if (!btn) return;
+        state.preferences = updatePreference(state.preferences, 'theme', btn.dataset.themeValue);
+        setPreferenceControls(state.preferences);
+        showToast('Theme updated.', 'success');
+    });
+}
 document.addEventListener('click', (event) => {
     const clickedPopover = event.target.closest('.popover-menu');
     const clickedPopoverButton = event.target.closest('#uiChatMenuBtn, #uiComposerMenuBtn');
