@@ -10,6 +10,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/css/features.css">
     <link rel="stylesheet" href="/css/ventura-theme.css">
+    <link rel="stylesheet" href="/css/overlays.css">
     <script>
         (function () {
             try {
@@ -1025,12 +1026,7 @@
                     <span id="status" class="status-offline">Disconnected</span>
                     <button id="uiChatSearchBtn" class="mini-icon-btn" type="button" title="Search messages">F</button>
                     <button id="uiScrollBottomBtn" class="mini-icon-btn" type="button" title="Scroll to bottom">V</button>
-                    <button id="uiChatMenuBtn" class="mini-icon-btn" type="button" title="Chat actions">...</button>
-                    <div id="uiChatMenu" class="popover-menu hidden" role="menu">
-                        <button id="uiCopyChatLinkBtn" type="button" role="menuitem">Copy Chat Link</button>
-                        <button id="uiExportChatBtn" type="button" role="menuitem">Export Local Chat</button>
-                        <button id="uiClearChatBtn" class="danger" type="button" role="menuitem">Delete Chat History</button>
-                    </div>
+                    <button id="uiChatMenuBtn" class="mini-icon-btn" type="button" title="Chat actions" aria-haspopup="menu">⋯</button>
                 </div>
             </div>
 
@@ -1054,12 +1050,7 @@
                         <button id="uiAttachBtn" class="btn-attach" type="button" title="Add file marker">+</button>
                         <input id="uiFileInput" class="hidden" type="file" multiple>
                         <textarea id="messageInput" placeholder="Write an encrypted message..." rows="1" disabled></textarea>
-                        <button id="uiComposerMenuBtn" class="btn-attach" type="button" title="Message tools">...</button>
-                        <div id="uiComposerMenu" class="popover-menu composer-popover hidden" role="menu">
-                            <button id="uiInsertTimestampBtn" type="button" role="menuitem">Insert Timestamp</button>
-                            <button id="uiInsertSecurityNoteBtn" type="button" role="menuitem">Insert Security Note</button>
-                            <button id="uiClearDraftBtn" class="danger" type="button" role="menuitem">Clear Draft</button>
-                        </div>
+                        <button id="uiComposerMenuBtn" class="btn-attach" type="button" title="Message tools" aria-haspopup="menu">⋯</button>
                         <button id="sendBtn" type="button" disabled>Send</button>
                     </div>
                     <div class="input-meta">
@@ -1074,7 +1065,8 @@
         </main>
     </div>
 
-    <div id="uiBackdrop" class="ui-backdrop hidden"></div>
+    <div id="ui-overlay-root" aria-hidden="true"></div>
+    <div id="ui-overlay-modal-holder" class="overlay-modal-holder"></div>
 
     <section id="uiSettingsPanel" class="modal-panel hidden" aria-modal="true" role="dialog" aria-labelledby="uiSettingsTitle">
         <div class="modal-head">

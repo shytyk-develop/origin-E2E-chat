@@ -22,7 +22,12 @@ import {
     scrollMessagesToBottom,
     openChatMenu,
     openComposerMenu,
+    openSettingsMenu,
     closeAllPopovers,
+    openChatInfoPopover,
+    openAppearancePopover,
+    initMessageContextMenu,
+    highlightMessageRow,
     openMessageSearch,
     closeMessageSearch,
     searchMessages,
@@ -40,7 +45,11 @@ import {
     setMessageActionHandlers,
     setRealtimeContext
 } from './ui.js';
-import { createRealtimeController } from './realtime.js';
+import { createRealtimeController, isUserOnline } from './realtime.js';
+import {
+    initOverlayManager,
+    registerOverlayActions,
+} from '../ui/overlays/overlayManager.js';
 import {
     MESSAGE_STATUS,
     createOutgoingMessage,
@@ -285,6 +294,76 @@ applyPreferences(state.preferences);
 setPreferenceControls(state.preferences);
 resetChatPanel();
 clearUsersList();
+
+initOverlayManager();
+
+registerOverlayActions({
+    'chat.search': () => openMessageSearch(),
+    'chat.copyLink': () => copyCurrentChatLink(),
+    'chat.export': () => exportCurrentChat(),
+    'chat.clearHistory': () => clearCurrentChat(),
+    'chat.delete': () => clearCurrentChat(),
+    'chat.info': () => {
+        if (!state.currentTargetUser) {
+            showToast('Select a chat first.', 'error');
+            return;
+        }
+        openChatInfoPopover(
+            state.currentTargetUser,
+            isUserOnline(state, state.currentTargetUser)
+        );
+    },
+    'settings.appearance': () => openAppearancePopover(state.preferences.theme),
+    'settings.modal': () => openSettings(),
+    'settings.shortcuts': () => openShortcuts(),
+    'composer.timestamp': () => {
+        insertAtCursor(new Date().toLocaleString());
+        persistCurrentDraft();
+    },
+    'composer.securityNote': () => {
+        insertAtCursor('Encrypted locally before transport.');
+        persistCurrentDraft();
+    },
+    'composer.clearDraft': () => {
+        clearDraft(state.myUsername, state.currentTargetUser);
+        clearComposer();
+        setDraftStatus('Draft cleared.');
+    },
+    'theme.set': ({ theme }) => {
+        state.preferences = updatePreference(state.preferences, 'theme', theme);
+        setPreferenceControls(state.preferences);
+        showToast('Theme updated.', 'success');
+    },
+    'message.copy': (payload) => {
+        const text = payload?.text || '';
+        if (!text) return;
+        copyText(text)
+            .then(() => showToast('Message copied.', 'success'))
+            .catch(() => showToast('Copy failed.', 'error'));
+    },
+    'message.delete': (payload) => {
+        if (payload?.messageId) deleteSingleMessage(payload.messageId);
+    },
+    'message.reply': (payload) => {
+        if (!payload?.text) return;
+        const quote = payload.text.split('\n').map((line) => `> ${line}`).join('\n');
+        insertAtCursor(`${quote}\n`);
+        focusComposer();
+    },
+    'message.highlight': (payload) => {
+        highlightMessageRow(payload?.messageId || payload?.clientMessageId);
+    },
+});
+
+initMessageContextMenu((row) => {
+    const text = row.querySelector('.message-text')?.textContent || '';
+    return {
+        messageId: row.dataset.messageId || null,
+        clientMessageId: row.dataset.clientMessageId || null,
+        messageType: row.dataset.messageType,
+        text,
+    };
+});
 
 // Main routing handler
 async function handleNavigation(view, param) {
@@ -752,11 +831,10 @@ DOM.clearContactSearchBtn.addEventListener('click', () => {
 DOM.refreshUsersBtn.addEventListener('click', refreshUsersDirectory);
 DOM.focusContactsBtn.addEventListener('click', focusContactSearch);
 DOM.focusComposerBtn.addEventListener('click', focusComposer);
-DOM.settingsBtn.addEventListener('click', openSettings);
+DOM.settingsBtn.addEventListener('click', openSettingsMenu);
 DOM.shortcutsBtn.addEventListener('click', openShortcuts);
 DOM.closeSettingsBtn.addEventListener('click', closeModals);
 DOM.closeShortcutsBtn.addEventListener('click', closeModals);
-DOM.backdrop.addEventListener('click', closeModals);
 
 DOM.copyUsernameBtn.addEventListener('click', copyCurrentUsername);
 DOM.logoutBtn.addEventListener('click', handleLogout);
@@ -768,35 +846,12 @@ DOM.closeMessageSearchBtn.addEventListener('click', closeMessageSearch);
 DOM.messageSearchInput.addEventListener('input', () => searchMessages(DOM.messageSearchInput.value));
 DOM.scrollBottomBtn.addEventListener('click', scrollMessagesToBottom);
 
-DOM.copyChatLinkBtn.addEventListener('click', copyCurrentChatLink);
-DOM.exportChatBtn.addEventListener('click', exportCurrentChat);
-DOM.clearChatBtn.addEventListener('click', clearCurrentChat);
-
 DOM.attachBtn.addEventListener('click', () => DOM.fileInput.click());
 DOM.fileInput.addEventListener('change', () => {
     if (!DOM.fileInput.files.length) return;
     insertAtCursor(createFileMarkers(DOM.fileInput.files));
     persistCurrentDraft();
     DOM.fileInput.value = '';
-});
-
-DOM.insertTimestampBtn.addEventListener('click', () => {
-    insertAtCursor(new Date().toLocaleString());
-    persistCurrentDraft();
-    closeAllPopovers();
-});
-
-DOM.insertSecurityNoteBtn.addEventListener('click', () => {
-    insertAtCursor('Encrypted locally before transport.');
-    persistCurrentDraft();
-    closeAllPopovers();
-});
-
-DOM.clearDraftBtn.addEventListener('click', () => {
-    clearDraft(state.myUsername, state.currentTargetUser);
-    clearComposer();
-    setDraftStatus("Draft cleared.");
-    closeAllPopovers();
 });
 
 bindPreferenceToggle(DOM.prefEnterSend, 'enterToSend');
@@ -812,14 +867,6 @@ if (DOM.themePicker) {
         showToast('Theme updated.', 'success');
     });
 }
-document.addEventListener('click', (event) => {
-    const clickedPopover = event.target.closest('.popover-menu');
-    const clickedPopoverButton = event.target.closest('#uiChatMenuBtn, #uiComposerMenuBtn');
-    if (!clickedPopover && !clickedPopoverButton) {
-        closeAllPopovers();
-    }
-});
-
 setMessageActionHandlers({
     onDeleteMessage: deleteSingleMessage
 });

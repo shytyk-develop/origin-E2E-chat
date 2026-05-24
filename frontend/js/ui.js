@@ -1,3 +1,12 @@
+import {
+    closeOverlay,
+    closeOverlaysForChatChange,
+    openContextMenu,
+    openDropdown,
+    openModalOverlay,
+    openPopoverOverlay,
+} from '../ui/overlays/overlayManager.js';
+
 export const DOM = {
     pageLogin: document.getElementById('page-login'),
     pageChat: document.getElementById('page-chat'),
@@ -30,10 +39,6 @@ export const DOM = {
     chatSearchBtn: document.getElementById('uiChatSearchBtn'),
     scrollBottomBtn: document.getElementById('uiScrollBottomBtn'),
     chatMenuBtn: document.getElementById('uiChatMenuBtn'),
-    chatMenu: document.getElementById('uiChatMenu'),
-    copyChatLinkBtn: document.getElementById('uiCopyChatLinkBtn'),
-    exportChatBtn: document.getElementById('uiExportChatBtn'),
-    clearChatBtn: document.getElementById('uiClearChatBtn'),
 
     messageSearchPanel: document.getElementById('uiMessageSearchPanel'),
     messageSearchInput: document.getElementById('uiMessageSearchInput'),
@@ -43,14 +48,9 @@ export const DOM = {
     attachBtn: document.getElementById('uiAttachBtn'),
     fileInput: document.getElementById('uiFileInput'),
     composerMenuBtn: document.getElementById('uiComposerMenuBtn'),
-    composerMenu: document.getElementById('uiComposerMenu'),
-    insertTimestampBtn: document.getElementById('uiInsertTimestampBtn'),
-    insertSecurityNoteBtn: document.getElementById('uiInsertSecurityNoteBtn'),
-    clearDraftBtn: document.getElementById('uiClearDraftBtn'),
     draftStatus: document.getElementById('uiDraftStatus'),
     charCounter: document.getElementById('uiCharCounter'),
 
-    backdrop: document.getElementById('uiBackdrop'),
     settingsPanel: document.getElementById('uiSettingsPanel'),
     closeSettingsBtn: document.getElementById('uiCloseSettingsBtn'),
     prefEnterSend: document.getElementById('uiPrefEnterSend'),
@@ -175,6 +175,7 @@ export function clearUsersList(message = 'No conversations yet') {
 }
 
 export function activateChatPanel(username) {
+    closeOverlaysForChatChange();
     DOM.chatWithTitle.textContent = `Secure channel: ${username}`;
     DOM.messageInput.disabled = false;
     DOM.sendBtn.disabled = false;
@@ -185,6 +186,7 @@ export function activateChatPanel(username) {
 }
 
 export function resetChatPanel() {
+    closeOverlaysForChatChange();
     DOM.chatWithTitle.textContent = 'Select a secure channel';
     if (DOM.chatSubtitle) {
         DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
@@ -468,16 +470,31 @@ export function scrollMessagesToBottom() {
 }
 
 export function openChatMenu() {
-    togglePopover(DOM.chatMenu);
+    openDropdown({
+        menuId: 'chat-header',
+        anchor: DOM.chatMenuBtn,
+        targetId: 'chat-header',
+    });
 }
 
 export function openComposerMenu() {
-    togglePopover(DOM.composerMenu);
+    openDropdown({
+        menuId: 'composer',
+        anchor: DOM.composerMenuBtn,
+        targetId: 'composer',
+    });
+}
+
+export function openSettingsMenu() {
+    openDropdown({
+        menuId: 'settings',
+        anchor: DOM.settingsBtn,
+        targetId: 'settings',
+    });
 }
 
 export function closeAllPopovers() {
-    DOM.chatMenu.classList.add('hidden');
-    DOM.composerMenu.classList.add('hidden');
+    closeOverlay();
 }
 
 export function openMessageSearch() {
@@ -513,22 +530,67 @@ export function searchMessages(query) {
 }
 
 export function openSettings() {
-    openModal(DOM.settingsPanel);
+    openModalOverlay('settings', 'settings');
 }
 
 export function openShortcuts() {
-    openModal(DOM.shortcutsPanel);
+    openModalOverlay('shortcuts', 'shortcuts');
 }
 
 export function closeModals() {
-    DOM.settingsPanel.classList.add('hidden');
-    DOM.shortcutsPanel.classList.add('hidden');
-    DOM.backdrop.classList.add('hidden');
+    closeOverlay();
 }
 
 export function closeTransientUi() {
-    closeAllPopovers();
-    closeModals();
+    closeOverlay();
+}
+
+export function openChatInfoPopover(partner, online) {
+    openPopoverOverlay({
+        popoverId: 'chat-info',
+        anchor: DOM.chatMenuBtn,
+        targetId: 'chat-info',
+        payload: { partner, online },
+    });
+}
+
+export function openAppearancePopover(theme, anchor = DOM.settingsBtn) {
+    openPopoverOverlay({
+        popoverId: 'appearance',
+        anchor,
+        targetId: 'appearance',
+        payload: { theme },
+    });
+}
+
+export function initMessageContextMenu(getContextPayload) {
+    DOM.messagesDiv.addEventListener('contextmenu', (event) => {
+        const row = event.target.closest('.message-row');
+        if (!row) return;
+        event.preventDefault();
+
+        const payload = getContextPayload(row);
+        if (!payload) return;
+
+        openContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            payload,
+            targetId: payload.clientMessageId || payload.messageId || 'message',
+        });
+    });
+}
+
+export function highlightMessageRow(targetId) {
+    DOM.messagesDiv.querySelectorAll('.message-row.is-highlighted').forEach((el) => {
+        el.classList.remove('is-highlighted');
+    });
+    if (!targetId) return;
+    const row =
+        DOM.messagesDiv.querySelector(`[data-message-id="${CSS.escape(String(targetId))}"]`) ||
+        DOM.messagesDiv.querySelector(`[data-client-message-id="${CSS.escape(String(targetId))}"]`);
+    row?.classList.add('is-highlighted');
+    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 export function showToast(message, type = 'info') {
@@ -559,13 +621,10 @@ export function setChatToolsEnabled(isEnabled) {
         DOM.chatSearchBtn,
         DOM.scrollBottomBtn,
         DOM.chatMenuBtn,
-        DOM.copyChatLinkBtn,
-        DOM.exportChatBtn,
-        DOM.clearChatBtn,
         DOM.composerMenuBtn,
-        DOM.attachBtn
-    ].forEach(control => {
-        control.disabled = !isEnabled;
+        DOM.attachBtn,
+    ].forEach((control) => {
+        if (control) control.disabled = !isEnabled;
     });
 }
 
@@ -663,19 +722,6 @@ function setActiveContact(username) {
         button.classList.toggle('is-active', isActive);
         button.setAttribute('aria-current', isActive ? 'true' : 'false');
     });
-}
-
-function togglePopover(popover) {
-    const shouldOpen = popover.classList.contains('hidden');
-    closeAllPopovers();
-    popover.classList.toggle('hidden', !shouldOpen);
-}
-
-function openModal(panel) {
-    closeAllPopovers();
-    DOM.backdrop.classList.remove('hidden');
-    DOM.settingsPanel.classList.toggle('hidden', panel !== DOM.settingsPanel);
-    DOM.shortcutsPanel.classList.toggle('hidden', panel !== DOM.shortcutsPanel);
 }
 
 function getInitials(username) {
