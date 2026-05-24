@@ -3,26 +3,22 @@
 import { closeOverlay } from './overlayManager.js';
 
 export function getMessageContextItems(payload) {
-    const isOutgoing = payload?.messageType === 'outgoing';
+    const items = [
+        { id: 'message.reply', label: 'Reply', disabled: !payload?.messageId },
+        { id: 'message.react', label: 'React', disabled: !payload?.messageId },
+        { id: 'message.copy', label: 'Copy' },
+    ];
 
-    if (isOutgoing) {
-        const items = [
-            { id: 'message.copy', label: 'Copy' },
-        ];
-        if (payload?.messageId) {
-            items.push({ id: 'message.edit', label: 'Edit', disabled: true });
-            items.push({ type: 'separator' });
-            items.push({ id: 'message.delete', label: 'Delete for everyone', danger: true });
-        }
-        return items;
+    if (payload?.messageType === 'outgoing' && payload?.messageId) {
+        items.push({ type: 'separator' });
+        items.push({ id: 'message.edit', label: 'Edit', disabled: true });
+        items.push({ id: 'message.delete', label: 'Delete for everyone', danger: true });
+    } else if (payload?.messageId) {
+        items.push({ type: 'separator' });
+        items.push({ id: 'message.highlight', label: 'Select / Highlight' });
     }
 
-    return [
-        { id: 'message.copy', label: 'Copy' },
-        { id: 'message.reply', label: 'Reply' },
-        { type: 'separator' },
-        { id: 'message.highlight', label: 'Select / Highlight' },
-    ];
+    return items;
 }
 
 export function renderContextMenu(container, state, runAction) {

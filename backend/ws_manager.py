@@ -229,10 +229,26 @@ class ConnectionManager:
         content_recipient = data.get("content_recipient")
         content_sender = data.get("content_sender")
         client_message_id = data.get("client_message_id")
+        reply_to_message_id = data.get("reply_to_message_id")
 
         sender_session = self.active_connections.get(sender_websocket, {})
         sender_username = sender_session.get("username", "Unknown")
         sender_public_key = sender_session.get("public_key")
+
+        validated_reply_id = None
+        if reply_to_message_id is not None:
+            try:
+                reply_id = int(reply_to_message_id)
+                in_chat = await asyncio.to_thread(
+                    database.message_in_conversation_db,
+                    reply_id,
+                    sender_username,
+                    target_username,
+                )
+                if in_chat:
+                    validated_reply_id = reply_id
+            except (TypeError, ValueError):
+                validated_reply_id = None
 
         is_new_chat = not await asyncio.to_thread(
             database.conversation_exists_db, sender_username, target_username
@@ -245,6 +261,7 @@ class ConnectionManager:
             "id": None,
             "client_message_id": client_message_id,
             "timestamp": None,
+            "reply_to_message_id": validated_reply_id,
         }
 
         target_websocket = self.get_websocket_for_user(target_username)
@@ -270,6 +287,7 @@ class ConnectionManager:
             content_recipient,
             content_sender,
             client_message_id,
+            validated_reply_id,
         )
 
         packet["id"] = saved_message["id"]
@@ -283,6 +301,7 @@ class ConnectionManager:
                     "client_message_id": client_message_id,
                     "id": saved_message["id"],
                     "timestamp": saved_message["timestamp"],
+                    "reply_to_message_id": validated_reply_id,
                 })
                 unread_count = await asyncio.to_thread(
                     database.get_unread_count_db, target_username, sender_username
@@ -312,6 +331,7 @@ class ConnectionManager:
             "id": saved_message["id"],
             "client_message_id": saved_message["client_message_id"],
             "timestamp": saved_message["timestamp"],
+            "reply_to_message_id": validated_reply_id,
         }
         await self._send_json(sender_websocket, ack_packet)
 
@@ -330,6 +350,48 @@ class ConnectionManager:
                     "partner": partner_data,
                     "last_message_at": saved_message["timestamp"],
                 })
+
+    async def handle_reaction(self, data: dict, websocket: WebSocket):
+        username = self._session_username(websocket)
+        message_id = data.get("message_id")
+        emoji = data.get("emoji")
+        if not username or message_id is None:
+            return
+
+        if emoji == "":
+            emoji = None
+
+        try:
+            message_id_int = int(message_id)
+        except (TypeError, ValueError):
+            return
+
+        result = await asyncio.to_thread(
+            database.set_message_reaction_db,
+            username,
+            message_id_int,
+            emoji,
+        )
+        if not result:
+            return
+
+        participants = await asyncio.to_thread(
+            database.get_message_participants_db,
+            message_id_int,
+        )
+        if not participants:
+            return
+
+        payload = {
+            "type": "reaction_sync",
+            "message_id": result["message_id"],
+            "partner": result["partner"],
+            "username": result["username"],
+            "emoji": result["emoji"],
+            "reactions": result["reactions"],
+        }
+        for participant in participants:
+            await self._notify_user(participant, payload)
 
 
 manager = ConnectionManager()

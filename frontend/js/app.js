@@ -43,8 +43,23 @@ import {
     removeMessageElement,
     removeMessageFromDom,
     setMessageActionHandlers,
-    setRealtimeContext
+    setRealtimeContext,
+    showComposerReplyBar,
+    hideComposerReplyBar,
+    patchMessageReactionsDom,
+    openReactionPicker,
+    scrollToMessageById,
 } from './ui.js';
+import {
+    attachReplyToMessage,
+    buildPendingReplyFromMessage,
+} from './messageReply.js';
+import {
+    applyReactionSync,
+    getMyReaction,
+    normalizeReactionsList,
+    sendReactionPacket,
+} from './messageReactions.js';
 import { createRealtimeController, isUserOnline } from './realtime.js';
 import {
     initOverlayManager,
@@ -122,7 +137,8 @@ let state = {
     onlineUsers: new Set(),
     unreadCounts: {},
     typingUsers: new Set(),
-    preferences: loadPreferences()
+    preferences: loadPreferences(),
+    pendingReply: null,
 };
 
 function syncRealtimeUi() {
@@ -198,6 +214,102 @@ function saveChatHistory() {
     saveHistory(state.myUsername, state.chatHistory);
 }
 
+function clearPendingReply() {
+    state.pendingReply = null;
+    hideComposerReplyBar();
+}
+
+function startReplyToMessage(payload) {
+    const partner = state.currentTargetUser;
+    if (!partner || !payload?.messageId) return;
+
+    const message = (state.chatHistory[partner] || []).find(
+        (m) => String(m.id) === String(payload.messageId)
+    );
+    if (!message) return;
+
+    state.pendingReply = buildPendingReplyFromMessage(message, partner);
+    showComposerReplyBar(state.pendingReply);
+    focusComposer();
+}
+
+function sendReactionForMessage(messageId, emoji) {
+    const partner = state.currentTargetUser;
+    if (!partner || messageId == null) return;
+
+    const message = (state.chatHistory[partner] || []).find(
+        (m) => String(m.id) === String(messageId)
+    );
+    if (!message) return;
+
+    const mine = getMyReaction(message.reactions, state.myUsername);
+    const nextEmoji = mine === emoji ? null : emoji;
+
+    sendReactionPacket(getSocket(), sendPacket, messageId, nextEmoji);
+}
+
+function handleToggleReaction(messageId, emoji, anchor) {
+    if (emoji) {
+        sendReactionForMessage(messageId, emoji);
+        return;
+    }
+
+    if (anchor) {
+        openReactionPicker(anchor, messageId);
+        return;
+    }
+
+    const partner = state.currentTargetUser;
+    const message = (state.chatHistory[partner] || []).find(
+        (m) => String(m.id) === String(messageId)
+    );
+    const mine = message ? getMyReaction(message.reactions, state.myUsername) : null;
+    if (mine) {
+        sendReactionForMessage(messageId, mine);
+    }
+}
+
+function mapDbMessageToLocal(msg, partner) {
+    const isMe = msg.sender === state.myUsername;
+    const record = {
+        id: msg.id,
+        clientMessageId: msg.client_message_id,
+        sender: isMe ? 'You' : msg.sender,
+        text: '',
+        type: isMe ? 'outgoing' : 'incoming',
+        timestamp: msg.timestamp || Date.now(),
+        status: isMe ? deriveOutgoingStatusFromDb(msg, state.myUsername) : undefined,
+        pending: false,
+        reactions: normalizeReactionsList(msg.reactions),
+    };
+    attachReplyToMessage(
+        record,
+        state.chatHistory,
+        partner,
+        msg.reply_to_message_id,
+        state.myUsername
+    );
+    return record;
+}
+
+function markRepliesUnavailable(partner, deletedMessageId) {
+    const messages = state.chatHistory[partner] || [];
+    let updated = false;
+    messages.forEach((m) => {
+        if (m.replyTo && String(m.replyTo.messageId) === String(deletedMessageId)) {
+            m.replyTo = {
+                messageId: deletedMessageId,
+                unavailable: true,
+                deleted: true,
+                author: m.replyTo.author || '',
+                preview: 'Message deleted',
+            };
+            updated = true;
+        }
+    });
+    return updated;
+}
+
 function handleMessageDeletedEvent(data) {
     console.log('[WS RECEIVED]', data);
 
@@ -218,6 +330,12 @@ function handleMessageDeletedEvent(data) {
     logDelete('[RESOLVED CHAT PARTNER]', chatPartner);
     logDelete('[MESSAGE FOUND in active chat]', Boolean(foundMessage));
 
+    const partnerKey = chatPartner || activeChat;
+    const repliesUpdated =
+        partnerKey && data.message_id
+            ? markRepliesUnavailable(partnerKey, data.message_id)
+            : false;
+
     const { changed, partner: affectedKey } = applyMessageDeleted(
         state.chatHistory,
         data,
@@ -225,7 +343,7 @@ function handleMessageDeletedEvent(data) {
         state.myUsername
     );
 
-    if (shouldRerender && activeChat) {
+    if ((shouldRerender || repliesUpdated) && activeChat === partnerKey) {
         const messagesAfter = state.chatHistory[activeChat] || [];
         renderMessagesList(messagesAfter);
         logDelete('[UI RERENDERED]', { activeChat, count: messagesAfter.length });
@@ -345,14 +463,24 @@ registerOverlayActions({
     'message.delete': (payload) => {
         if (payload?.messageId) deleteSingleMessage(payload.messageId);
     },
-    'message.reply': (payload) => {
-        if (!payload?.text) return;
-        const quote = payload.text.split('\n').map((line) => `> ${line}`).join('\n');
-        insertAtCursor(`${quote}\n`);
-        focusComposer();
-    },
     'message.highlight': (payload) => {
         highlightMessageRow(payload?.messageId || payload?.clientMessageId);
+    },
+    'message.reply': (payload) => {
+        startReplyToMessage(payload);
+    },
+    'message.react': (payload) => {
+        if (!payload?.messageId) return;
+        const row = DOM.messagesDiv.querySelector(
+            `[data-message-id="${CSS.escape(String(payload.messageId))}"]`
+        );
+        const anchor = row?.querySelector('.message-bubble') || row;
+        handleToggleReaction(payload.messageId, null, anchor);
+    },
+    'reaction.pick': (payload) => {
+        if (payload?.messageId && payload?.emoji) {
+            sendReactionForMessage(payload.messageId, payload.emoji);
+        }
     },
 });
 
@@ -545,14 +673,23 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                     ensureRealtime().incrementUnread(data.from);
                 }
 
-                processMessage(data.from, {
+                const incoming = {
                     id: data.id,
                     clientMessageId: data.client_message_id,
                     sender: data.from,
                     text: decryptedText,
                     type: "incoming",
-                    timestamp: data.timestamp || Date.now()
-                });
+                    timestamp: data.timestamp || Date.now(),
+                    reactions: [],
+                };
+                attachReplyToMessage(
+                    incoming,
+                    state.chatHistory,
+                    data.from,
+                    data.reply_to_message_id,
+                    state.myUsername
+                );
+                processMessage(data.from, incoming);
 
                 if (data.id) {
                     ensureRealtime().sendDeliveryAck(data.from, data.id, data.client_message_id);
@@ -569,6 +706,15 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 if (target && data.id) {
                     target.id = data.id;
                     if (data.timestamp) target.timestamp = data.timestamp;
+                    if (data.reply_to_message_id) {
+                        attachReplyToMessage(
+                            target,
+                            state.chatHistory,
+                            partner,
+                            data.reply_to_message_id,
+                            state.myUsername
+                        );
+                    }
                     saveChatHistory();
                 }
 
@@ -593,6 +739,9 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
             else if (data.type === "conversation_deleted") {
                 handleConversationDeletedEvent(data);
             }
+            else if (data.type === "reaction_sync") {
+                handleReactionSyncEvent(data);
+            }
         },
         (event, closedByUser) => {
             if (!closedByUser) {
@@ -610,6 +759,19 @@ function ensureRouter() {
     routerReady = true;
 }
 
+function handleReactionSyncEvent(data) {
+    const partner = data.partner;
+    if (!partner) return;
+
+    const result = applyReactionSync(state.chatHistory, data, state.myUsername);
+    if (!result) return;
+    saveChatHistory();
+
+    if (state.currentTargetUser === partner) {
+        patchMessageReactionsDom(data.message_id, result.message.reactions, state.myUsername);
+    }
+}
+
 function processMessage(chatPartner, messageInput) {
     if (!state.chatHistory[chatPartner]) {
         state.chatHistory[chatPartner] = [];
@@ -624,7 +786,19 @@ function processMessage(chatPartner, messageInput) {
         timestamp: messageInput.timestamp || Date.now(),
         status: messageInput.status || (messageInput.type === 'outgoing' ? MESSAGE_STATUS.SENT : undefined),
         pending: messageInput.status === MESSAGE_STATUS.PENDING || messageInput.status === MESSAGE_STATUS.SENDING,
+        replyTo: messageInput.replyTo || null,
+        reactions: normalizeReactionsList(messageInput.reactions),
     };
+
+    if (!message.replyTo && messageInput.replyToMessageId) {
+        attachReplyToMessage(
+            message,
+            state.chatHistory,
+            chatPartner,
+            messageInput.replyToMessageId,
+            state.myUsername
+        );
+    }
 
     state.chatHistory[chatPartner].push(message);
 
@@ -667,6 +841,7 @@ async function switchChat(username) {
 
     persistCurrentDraft();
     cancelReadReceipt();
+    clearPendingReply();
     state.currentTargetUser = username;
     sendChatFocus(username);
     activateChatPanel(username);
@@ -686,19 +861,9 @@ async function switchChat(username) {
 
             try {
                 const decryptedText = await decryptMessage(state.myKeys.privateKey, encryptedBytes);
-                const outgoingStatus = isMe
-                    ? deriveOutgoingStatusFromDb(msg, state.myUsername)
-                    : undefined;
-                state.chatHistory[username].push({
-                    id: msg.id,
-                    clientMessageId: msg.client_message_id,
-                    sender: isMe ? "You" : msg.sender,
-                    text: decryptedText,
-                    type: isMe ? "outgoing" : "incoming",
-                    timestamp: msg.timestamp || Date.now(),
-                    status: outgoingStatus,
-                    pending: false,
-                });
+                const record = mapDbMessageToLocal(msg, username);
+                record.text = decryptedText;
+                state.chatHistory[username].push(record);
             } catch (cryptoErr) {
                 console.error("🔒 Crypto payload corruption block dropped:", cryptoErr);
             }
@@ -751,12 +916,22 @@ async function handleSendMessage() {
         const encryptedBufferSelf = await encryptMessage(state.myKeys.publicKey, text);
         const encryptedArraySender = Array.from(new Uint8Array(encryptedBufferSelf));
         const clientMessageId = crypto.randomUUID();
+        const replyToId = state.pendingReply?.messageId ?? null;
+        const replyMeta = state.pendingReply
+            ? {
+                messageId: state.pendingReply.messageId,
+                unavailable: false,
+                author: state.pendingReply.author,
+                preview: state.pendingReply.preview,
+            }
+            : null;
 
         const sent = sendPacket(getSocket(), "message", {
             to: state.currentTargetUser,
             content_recipient: encryptedArrayRecipient,
             content_sender: encryptedArraySender,
-            client_message_id: clientMessageId
+            client_message_id: clientMessageId,
+            reply_to_message_id: replyToId,
         });
 
         if (!sent) {
@@ -778,7 +953,9 @@ async function handleSendMessage() {
             clientMessageId,
             text,
             status: MESSAGE_STATUS.SENDING,
+            replyTo: replyMeta,
         }));
+        clearPendingReply();
         clearDraft(state.myUsername, state.currentTargetUser);
         clearComposer();
         setDraftStatus("Message queued. Waiting for database sync.");
@@ -873,8 +1050,15 @@ if (DOM.themePicker) {
     });
 }
 setMessageActionHandlers({
-    onDeleteMessage: deleteSingleMessage
+    onDeleteMessage: deleteSingleMessage,
+    onReply: (message) => startReplyToMessage({ messageId: message.id }),
+    onReact: (messageId, emoji, anchor) => handleToggleReaction(messageId, emoji, anchor),
+    getMyUsername: () => state.myUsername,
 });
+
+if (DOM.replyCloseBtn) {
+    DOM.replyCloseBtn.addEventListener('click', clearPendingReply);
+}
 
 registerShortcuts({
     closeTransientUi: () => {

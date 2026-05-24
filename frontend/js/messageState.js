@@ -50,6 +50,8 @@ export function createOutgoingMessage({
     text,
     timestamp = Date.now(),
     status = MESSAGE_STATUS.SENDING,
+    replyTo = null,
+    reactions = [],
 }) {
     return {
         id: null,
@@ -60,6 +62,8 @@ export function createOutgoingMessage({
         timestamp,
         status,
         pending: status === MESSAGE_STATUS.PENDING || status === MESSAGE_STATUS.SENDING,
+        replyTo,
+        reactions: reactions || [],
     };
 }
 

@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/css/features.css">
     <link rel="stylesheet" href="/css/ventura-theme.css">
     <link rel="stylesheet" href="/css/overlays.css">
+    <link rel="stylesheet" href="/css/message-features.css">
     <script>
         (function () {
             try {
@@ -1046,6 +1047,14 @@
                 </div>
 
                 <div class="input-bar">
+                    <div id="uiReplyBar" class="composer-reply-bar hidden" aria-live="polite">
+                        <div class="composer-reply-accent" aria-hidden="true"></div>
+                        <div class="composer-reply-body">
+                            <p id="uiReplyLabel" class="composer-reply-label">Reply</p>
+                            <p id="uiReplyPreview" class="composer-reply-preview"></p>
+                        </div>
+                        <button id="uiReplyCloseBtn" type="button" class="composer-reply-close" title="Cancel reply">×</button>
+                    </div>
                     <div class="input-row">
                         <button id="uiAttachBtn" class="btn-attach" type="button" title="Add file marker">+</button>
                         <input id="uiFileInput" class="hidden" type="file" multiple>

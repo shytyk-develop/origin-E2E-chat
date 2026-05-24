@@ -1,6 +1,7 @@
 // Anchored popovers — chat info, quick appearance.
 
 import { closeOverlay } from './overlayManager.js';
+import { QUICK_REACTIONS } from '../../js/messageReactions.js';
 
 export function renderPopover(container, state, runAction) {
     const { popoverId } = state.payload || {};
@@ -12,6 +13,11 @@ export function renderPopover(container, state, runAction) {
 
     if (popoverId === 'appearance') {
         renderAppearanceQuick(container, state.payload, runAction);
+        return;
+    }
+
+    if (popoverId === 'reactions') {
+        renderReactionPicker(container, state.payload, runAction);
         return;
     }
 
@@ -73,6 +79,29 @@ function renderAppearanceQuick(container, payload, runAction) {
     });
 
     container.append(title, row, more);
+}
+
+function renderReactionPicker(container, payload, runAction) {
+    const title = document.createElement('h3');
+    title.className = 'overlay-popover-title';
+    title.textContent = 'React';
+
+    const picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+
+    QUICK_REACTIONS.forEach((emoji) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'reaction-picker-btn';
+        btn.textContent = emoji;
+        btn.addEventListener('click', () => {
+            closeOverlay({ reason: 'reaction-pick' });
+            runAction('reaction.pick', { messageId: payload?.messageId, emoji });
+        });
+        picker.append(btn);
+    });
+
+    container.append(title, picker);
 }
 
 function appendMeta(dl, label, value) {

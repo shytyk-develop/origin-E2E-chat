@@ -147,6 +147,26 @@ def init_db():
                 PRIMARY KEY (username, partner)
             )
         ''')
+
+        cursor.execute('''
+            ALTER TABLE chat_history
+            ADD COLUMN IF NOT EXISTS reply_to_message_id INTEGER;
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS message_reactions (
+                message_id INTEGER NOT NULL,
+                username VARCHAR(255) NOT NULL,
+                emoji VARCHAR(16) NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (message_id, username)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_message_reactions_message_id
+            ON message_reactions (message_id);
+        ''')
         
         conn.commit()
     finally:
@@ -473,7 +493,7 @@ def get_chat_history_db(user: str, partner: str, limit: int = 50, offset: int = 
     try:
         cursor.execute('''
             SELECT id, sender, receiver, content_recipient, content_sender, client_message_id, timestamp,
-                   delivered_at, read_at
+                   delivered_at, read_at, reply_to_message_id
             FROM chat_history 
             WHERE (sender = %s AND receiver = %s) OR (sender = %s AND receiver = %s)
             ORDER BY id DESC
@@ -483,6 +503,9 @@ def get_chat_history_db(user: str, partner: str, limit: int = 50, offset: int = 
         
         # Reverse the chunk before returning so it displays chronologically (oldest to newest)
         rows.reverse()
+
+        message_ids = [r[0] for r in rows]
+        reactions_map = get_reactions_for_message_ids_db(message_ids)
         
         return [{
             "id": r[0],
@@ -494,25 +517,71 @@ def get_chat_history_db(user: str, partner: str, limit: int = 50, offset: int = 
             "timestamp": r[6].isoformat() if r[6] else None,
             "delivered_at": r[7].isoformat() if r[7] else None,
             "read_at": r[8].isoformat() if r[8] else None,
+            "reply_to_message_id": r[9],
+            "reactions": reactions_map.get(r[0], []),
         } for r in rows]
     finally:
         release_connection(conn)
 
-def save_chat_history_message(sender: str, receiver: str, content_recipient: list, content_sender: list, client_message_id: Optional[str] = None):
+def message_in_conversation_db(message_id: int, user_a: str, user_b: str) -> bool:
+    """True if message_id belongs to the conversation between user_a and user_b."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT 1 FROM chat_history
+            WHERE id = %s
+              AND (
+                (sender = %s AND receiver = %s)
+                OR (sender = %s AND receiver = %s)
+              )
+            LIMIT 1
+        ''', (message_id, user_a, user_b, user_b, user_a))
+        return cursor.fetchone() is not None
+    finally:
+        release_connection(conn)
+
+
+def get_message_participants_db(message_id: int) -> Optional[tuple]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            'SELECT sender, receiver FROM chat_history WHERE id = %s',
+            (message_id,)
+        )
+        row = cursor.fetchone()
+        return (row[0], row[1]) if row else None
+    finally:
+        release_connection(conn)
+
+
+def save_chat_history_message(
+    sender: str,
+    receiver: str,
+    content_recipient: list,
+    content_sender: list,
+    client_message_id: Optional[str] = None,
+    reply_to_message_id: Optional[int] = None,
+):
     """Persists one encrypted chat packet and returns its database identity."""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            INSERT INTO chat_history (sender, receiver, content_recipient, content_sender, client_message_id)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO chat_history (
+                sender, receiver, content_recipient, content_sender,
+                client_message_id, reply_to_message_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id, timestamp
         ''', (
             sender,
             receiver,
             json.dumps(content_recipient),
             json.dumps(content_sender),
-            client_message_id
+            client_message_id,
+            reply_to_message_id,
         ))
         row = cursor.fetchone()
         conn.commit()
@@ -526,6 +595,78 @@ def save_chat_history_message(sender: str, receiver: str, content_recipient: lis
         raise e
     finally:
         release_connection(conn)
+
+ALLOWED_REACTION_EMOJI = frozenset({'👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'})
+
+
+def get_reactions_for_message_ids_db(message_ids: list) -> dict:
+    if not message_ids:
+        return {}
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT message_id, username, emoji
+            FROM message_reactions
+            WHERE message_id = ANY(%s)
+            ORDER BY message_id, updated_at ASC
+        ''', (message_ids,))
+        result = {}
+        for message_id, username, emoji in cursor.fetchall():
+            result.setdefault(message_id, []).append({
+                "username": username,
+                "emoji": emoji,
+            })
+        return result
+    finally:
+        release_connection(conn)
+
+
+def set_message_reaction_db(username: str, message_id: int, emoji: Optional[str]) -> Optional[dict]:
+    """Set or remove (emoji=None) a reaction. Returns sync payload or None if invalid."""
+    if emoji is not None and emoji not in ALLOWED_REACTION_EMOJI:
+        return None
+
+    participants = get_message_participants_db(message_id)
+    if not participants:
+        return None
+    sender, receiver = participants
+    if username not in (sender, receiver):
+        return None
+
+    partner = receiver if sender == username else sender
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if emoji is None:
+            cursor.execute(
+                'DELETE FROM message_reactions WHERE message_id = %s AND username = %s',
+                (message_id, username),
+            )
+        else:
+            cursor.execute('''
+                INSERT INTO message_reactions (message_id, username, emoji, updated_at)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (message_id, username)
+                DO UPDATE SET emoji = EXCLUDED.emoji, updated_at = CURRENT_TIMESTAMP
+            ''', (message_id, username, emoji))
+        conn.commit()
+
+        reactions = get_reactions_for_message_ids_db([message_id]).get(message_id, [])
+        return {
+            "message_id": message_id,
+            "partner": partner,
+            "username": username,
+            "emoji": emoji,
+            "reactions": reactions,
+        }
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        release_connection(conn)
+
 
 def delete_chat_message_db(username: str, message_id: int) -> Optional[dict]:
     """Deletes one chat message if the user is a participant. Returns metadata for WS sync."""
@@ -544,6 +685,8 @@ def delete_chat_message_db(username: str, message_id: int) -> Optional[dict]:
 
         msg_id, sender, receiver, client_message_id = row
         partner = receiver if sender == username else sender
+
+        cursor.execute('DELETE FROM message_reactions WHERE message_id = %s', (msg_id,))
 
         cursor.execute('''
             DELETE FROM chat_history

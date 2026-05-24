@@ -6,6 +6,7 @@ import {
     openModalOverlay,
     openPopoverOverlay,
 } from '../ui/overlays/overlayManager.js';
+import { getMyReaction, getReactionCounts, QUICK_REACTIONS } from './messageReactions.js';
 
 export const DOM = {
     pageLogin: document.getElementById('page-login'),
@@ -48,6 +49,10 @@ export const DOM = {
     attachBtn: document.getElementById('uiAttachBtn'),
     fileInput: document.getElementById('uiFileInput'),
     composerMenuBtn: document.getElementById('uiComposerMenuBtn'),
+    replyBar: document.getElementById('uiReplyBar'),
+    replyLabel: document.getElementById('uiReplyLabel'),
+    replyPreview: document.getElementById('uiReplyPreview'),
+    replyCloseBtn: document.getElementById('uiReplyCloseBtn'),
     draftStatus: document.getElementById('uiDraftStatus'),
     charCounter: document.getElementById('uiCharCounter'),
 
@@ -97,7 +102,10 @@ const UNREAD_BADGE =
 const COMPOSER_DEFAULT_META = 'Cipher Stack: AES-GCM-256 + RSA-OAEP-2048';
 const MAX_MESSAGE_LENGTH = 2000;
 const messageActionHandlers = {
-    onDeleteMessage: null
+    onDeleteMessage: null,
+    onReply: null,
+    onReact: null,
+    getMyUsername: () => '',
 };
 
 export function setRealtimeContext(ctx = {}) {
@@ -234,6 +242,74 @@ export function appendMessage(messageOrSender, text, type, timestamp = Date.now(
     scrollMessagesToBottom();
 }
 
+function buildReplyPreviewEl(replyTo) {
+    if (!replyTo) return null;
+
+    const block = document.createElement('button');
+    block.type = 'button';
+    block.className = 'message-reply-preview';
+    if (replyTo.unavailable) block.classList.add('is-unavailable');
+
+    const author = document.createElement('span');
+    author.className = 'message-reply-author';
+    author.textContent = replyTo.author || 'Message';
+
+    const preview = document.createElement('span');
+    preview.className = 'message-reply-text';
+    preview.textContent = replyTo.preview || '';
+
+    block.append(author, preview);
+
+    if (!replyTo.unavailable && replyTo.messageId) {
+        block.addEventListener('click', (event) => {
+            event.stopPropagation();
+            scrollToMessageById(replyTo.messageId);
+        });
+    }
+
+    return block;
+}
+
+function buildReactionsEl(message) {
+    const reactions = message.reactions || [];
+    if (!reactions.length) return null;
+
+    const myUsername = messageActionHandlers.getMyUsername?.() || '';
+    const counts = getReactionCounts(reactions);
+    const wrap = document.createElement('div');
+    wrap.className = 'message-reactions';
+
+    counts.forEach((count, emoji) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'message-reaction-chip';
+        if (reactions.some((r) => r.username === myUsername && r.emoji === emoji)) {
+            chip.classList.add('is-mine');
+        }
+        chip.title = 'Toggle reaction';
+        chip.addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (!message.id) return;
+            messageActionHandlers.onReact?.(message.id, emoji);
+        });
+
+        const emojiSpan = document.createElement('span');
+        emojiSpan.textContent = emoji;
+        chip.append(emojiSpan);
+
+        if (count > 1) {
+            const countEl = document.createElement('span');
+            countEl.className = 'message-reaction-count';
+            countEl.textContent = String(count);
+            chip.append(countEl);
+        }
+
+        wrap.append(chip);
+    });
+
+    return wrap;
+}
+
 function buildMessageElement(message, previousMessage = null) {
     const isOutgoing = message.type === 'outgoing';
     const showSenderName = shouldShowSenderName(message, previousMessage);
@@ -265,14 +341,58 @@ function buildMessageElement(message, previousMessage = null) {
     const shell = document.createElement('div');
     shell.className = 'message-shell';
 
+    const quickActions = document.createElement('div');
+    quickActions.className = 'message-quick-actions';
+
+    const replyBtn = document.createElement('button');
+    replyBtn.type = 'button';
+    replyBtn.className = 'message-quick-btn';
+    replyBtn.title = 'Reply';
+    replyBtn.textContent = '↩';
+    replyBtn.disabled = !message.id;
+    replyBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!message.id) return;
+        messageActionHandlers.onReply?.(message);
+    });
+
+    const reactBtn = document.createElement('button');
+    reactBtn.type = 'button';
+    reactBtn.className = 'message-quick-btn';
+    reactBtn.title = 'React';
+    reactBtn.textContent = '☺';
+    reactBtn.disabled = !message.id;
+    reactBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!message.id) return;
+        messageActionHandlers.onReact?.(message.id, null, event.currentTarget);
+    });
+
+    quickActions.append(replyBtn, reactBtn);
+
     const bubble = document.createElement('div');
     bubble.className = [
         'message-bubble',
         isOutgoing ? 'message-bubble--own' : 'message-bubble--other',
     ].join(' ');
 
+    bubble.addEventListener('dblclick', (event) => {
+        event.stopPropagation();
+        if (!message.id) return;
+        messageActionHandlers.onReact?.(message.id, null, bubble);
+    });
+
+    const inner = document.createElement('div');
+    inner.className = 'message-bubble-inner';
+
+    const replyEl = buildReplyPreviewEl(message.replyTo);
+    if (replyEl) inner.append(replyEl);
+
+    const bodyRow = document.createElement('div');
+    bodyRow.className = 'message-body-row';
+
     const textEl = document.createElement('span');
-    textEl.className = 'message-text min-w-0 break-words';
+    textEl.className = 'message-text';
     textEl.textContent = message.text;
 
     const meta = document.createElement('span');
@@ -292,7 +412,9 @@ function buildMessageElement(message, previousMessage = null) {
         meta.append(statusEl);
     }
 
-    bubble.append(textEl, meta);
+    bodyRow.append(textEl, meta);
+    inner.append(bodyRow);
+    bubble.append(inner);
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -305,9 +427,75 @@ function buildMessageElement(message, previousMessage = null) {
         messageActionHandlers.onDeleteMessage?.(message.id);
     });
 
-    shell.append(bubble, deleteBtn);
+    shell.append(quickActions, bubble, deleteBtn);
     row.append(shell);
+
+    const reactionsEl = buildReactionsEl(message);
+    if (reactionsEl) row.append(reactionsEl);
+
     return row;
+}
+
+export function scrollToMessageById(messageId) {
+    if (messageId == null) return;
+    const row = DOM.messagesDiv.querySelector(
+        `[data-message-id="${CSS.escape(String(messageId))}"]`
+    );
+    if (!row) return;
+    row.classList.add('is-highlighted');
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    window.setTimeout(() => row.classList.remove('is-highlighted'), 1600);
+}
+
+export function patchMessageReactionsDom(messageId, reactions, myUsername) {
+    const row = DOM.messagesDiv.querySelector(
+        `[data-message-id="${CSS.escape(String(messageId))}"]`
+    );
+    if (!row) return;
+
+    let wrap = row.querySelector('.message-reactions');
+    if (!reactions?.length) {
+        wrap?.remove();
+        return;
+    }
+
+    const fakeMessage = { id: messageId, reactions };
+    const next = buildReactionsEl(fakeMessage);
+    if (!next) return;
+
+    if (wrap) {
+        wrap.replaceWith(next);
+    } else {
+        row.append(next);
+    }
+}
+
+export function showComposerReplyBar(pendingReply) {
+    if (!DOM.replyBar) return;
+    if (!pendingReply) {
+        DOM.replyBar.classList.add('hidden');
+        return;
+    }
+    DOM.replyBar.classList.remove('hidden');
+    if (DOM.replyLabel) {
+        DOM.replyLabel.textContent = `Reply to ${pendingReply.author}`;
+    }
+    if (DOM.replyPreview) {
+        DOM.replyPreview.textContent = pendingReply.preview;
+    }
+}
+
+export function hideComposerReplyBar() {
+    DOM.replyBar?.classList.add('hidden');
+}
+
+export function openReactionPicker(anchor, messageId) {
+    openPopoverOverlay({
+        popoverId: 'reactions',
+        anchor,
+        targetId: `reactions-${messageId}`,
+        payload: { messageId },
+    });
 }
 
 function shouldShowSenderName(message, previousMessage) {
@@ -404,6 +592,9 @@ export function removeMessageFromDom({ messageId, clientMessageId } = {}) {
 
 export function setMessageActionHandlers(handlers) {
     messageActionHandlers.onDeleteMessage = handlers.onDeleteMessage || null;
+    messageActionHandlers.onReply = handlers.onReply || null;
+    messageActionHandlers.onReact = handlers.onReact || null;
+    messageActionHandlers.getMyUsername = handlers.getMyUsername || (() => '');
 }
 
 export function setComposerValue(text) {
