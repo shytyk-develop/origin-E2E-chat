@@ -56,6 +56,7 @@ import {
 } from './messageReply.js';
 import {
     applyReactionSync,
+    applyLocalReaction,
     getMyReaction,
     normalizeReactionsList,
     sendReactionPacket,
@@ -244,8 +245,19 @@ function sendReactionForMessage(messageId, emoji) {
 
     const mine = getMyReaction(message.reactions, state.myUsername);
     const nextEmoji = mine === emoji ? null : emoji;
+    const previous = normalizeReactionsList(message.reactions);
 
-    sendReactionPacket(getSocket(), sendPacket, messageId, nextEmoji);
+    const reactions = applyLocalReaction(message, state.myUsername, nextEmoji);
+    saveChatHistory();
+    patchMessageReactionsDom(messageId, reactions, state.myUsername);
+
+    const sent = sendReactionPacket(getSocket(), sendPacket, messageId, nextEmoji);
+    if (!sent) {
+        message.reactions = previous;
+        saveChatHistory();
+        patchMessageReactionsDom(messageId, previous, state.myUsername);
+        showToast('Could not send reaction. Check connection.', 'error');
+    }
 }
 
 function handleToggleReaction(messageId, emoji, anchor) {
@@ -760,15 +772,15 @@ function ensureRouter() {
 }
 
 function handleReactionSyncEvent(data) {
-    const partner = data.partner;
-    if (!partner) return;
-
     const result = applyReactionSync(state.chatHistory, data, state.myUsername);
     if (!result) return;
     saveChatHistory();
 
-    if (state.currentTargetUser === partner) {
-        patchMessageReactionsDom(data.message_id, result.message.reactions, state.myUsername);
+    const row = DOM.messagesDiv.querySelector(
+        `[data-message-id="${CSS.escape(String(data.message_id))}"]`
+    );
+    if (row) {
+        patchMessageReactionsDom(data.message_id, result.reactions, state.myUsername);
     }
 }
 

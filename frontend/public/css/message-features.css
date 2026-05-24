@@ -128,32 +128,59 @@
     gap: 6px 8px;
 }
 
-.message-quick-actions {
+/* Hover actions — absolute overlay; never affects bubble width or alignment */
+.message-hover-actions {
     align-items: center;
     display: flex;
-    flex-shrink: 0;
-    gap: 2px;
+    gap: 4px;
     opacity: 0;
-    transition: opacity 140ms ease;
+    pointer-events: none;
+    position: absolute;
+    top: -14px;
+    transition: opacity 140ms ease, visibility 140ms ease;
+    visibility: hidden;
+    white-space: nowrap;
+    z-index: 6;
 }
 
-.message-row:hover .message-quick-actions,
-.message-row:focus-within .message-quick-actions {
+.message-row:hover .message-hover-actions,
+.message-row:focus-within .message-hover-actions,
+.message-hover-actions:focus-within {
     opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
 }
 
-.message-quick-btn {
+.message-row--own .message-hover-actions {
+    right: 6px;
+}
+
+.message-row--other .message-hover-actions {
+    left: 6px;
+}
+
+.message-quick-btn,
+.message-action-btn--delete {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 999px;
+    box-shadow: var(--shadow-bubble);
     color: var(--text-secondary);
     cursor: pointer;
+    flex-shrink: 0;
     font-size: 13px;
-    height: 26px;
+    height: 28px;
     line-height: 1;
-    min-width: 26px;
-    padding: 0 6px;
+    min-width: 28px;
+    padding: 0 7px;
+    pointer-events: auto;
+    position: relative;
     transition: background 120ms, color 120ms, border-color 120ms;
+    z-index: 7;
+}
+
+.message-quick-btn {
+    font-size: 13px;
 }
 
 .message-quick-btn:hover {
@@ -167,7 +194,8 @@
     flex-wrap: wrap;
     gap: 4px;
     margin-top: 4px;
-    max-width: min(100%, 20rem);
+    max-width: 100%;
+    width: 100%;
 }
 
 .message-reaction-chip {
@@ -227,11 +255,22 @@
     transform: scale(1.12);
 }
 
-.message-row--own .message-reactions {
+.message-row--own .message-content-wrap .message-reactions {
     justify-content: flex-end;
-    margin-left: auto;
 }
 
-.message-row--other .message-reactions {
+.message-row--other .message-content-wrap .message-reactions {
     justify-content: flex-start;
+}
+
+.message-action-btn--delete:hover {
+    background: var(--red-10);
+    border-color: var(--red-20);
+    color: var(--red);
+}
+
+.message-action-btn--delete:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+    pointer-events: none;
 }

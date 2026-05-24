@@ -261,15 +261,26 @@ body {
     padding: 0 4px;
 }
 
-.message-shell {
-    align-items: center;
+.message-content-wrap {
     display: flex;
-    gap: 4px;
+    flex-direction: column;
     max-width: min(100%, 32rem);
+    min-width: 0;
+    padding-top: 4px;
 }
 
-.message-row--own .message-shell {
-    flex-direction: row-reverse;
+.message-row--own .message-content-wrap {
+    align-items: flex-end;
+}
+
+.message-row--other .message-content-wrap {
+    align-items: flex-start;
+}
+
+.message-shell {
+    display: inline-block;
+    max-width: 100%;
+    position: relative;
 }
 
 /* ─── Bubbles ─── */
@@ -366,16 +377,9 @@ body {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--bubble-own-text) 18%, transparent);
 }
 
-.message-action-btn {
+.message-action-btn--delete {
     border-color: var(--border);
     color: var(--text-secondary);
-    opacity: 0;
-    transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
-}
-
-.message-row:hover .message-action-btn,
-.message-row:focus-within .message-action-btn {
-    opacity: 1;
 }
 
 .message-action-btn:hover {

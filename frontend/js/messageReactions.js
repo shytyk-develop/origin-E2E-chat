@@ -1,5 +1,8 @@
 // Emoji reactions — realtime sync; one reaction per user per message.
 
+import { normalizeUsername } from './api.js';
+import { findChatHistoryKey } from './messageDelete.js';
+
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 
 export function normalizeReactionsList(reactions) {
@@ -9,22 +12,72 @@ export function normalizeReactionsList(reactions) {
         .map((r) => ({ username: r.username, emoji: r.emoji }));
 }
 
-export function findMessageForReaction(chatHistory, partner, messageId) {
-    if (!partner || messageId == null) return null;
-    const messages = chatHistory[partner] || [];
-    return messages.find((m) => m.id != null && String(m.id) === String(messageId)) || null;
+/**
+ * chatHistory key for this user from a reaction_sync event.
+ * `partner` in the payload is the reactor's counterparty; the peer must use reactor as key.
+ */
+export function resolveReactionChatPartner(event, myUsername) {
+    const me = myUsername ? normalizeUsername(myUsername) : '';
+    const reactor = event.username ? normalizeUsername(event.username) : '';
+    const payloadPartner = event.partner ? normalizeUsername(event.partner) : '';
+
+    if (reactor && me && reactor === me) {
+        return payloadPartner;
+    }
+    if (reactor && me && reactor !== me) {
+        return reactor;
+    }
+    return payloadPartner;
+}
+
+export function findMessageForReaction(chatHistory, messageId, preferredPartner = null) {
+    if (messageId == null) return null;
+
+    const keysToTry = [];
+    if (preferredPartner) {
+        const key = findChatHistoryKey(chatHistory, preferredPartner);
+        if (key) keysToTry.push(key);
+    }
+    keysToTry.push(...Object.keys(chatHistory));
+
+    const seen = new Set();
+    for (const key of keysToTry) {
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        const message = (chatHistory[key] || []).find(
+            (m) => m.id != null && String(m.id) === String(messageId)
+        );
+        if (message) return { partner: key, message };
+    }
+    return null;
 }
 
 export function applyReactionSync(chatHistory, event, myUsername) {
-    const partner = event.partner;
     const messageId = event.message_id;
-    if (!partner || messageId == null) return null;
+    if (messageId == null) return null;
 
-    const message = findMessageForReaction(chatHistory, partner, messageId);
-    if (!message) return null;
+    const chatPartner = resolveReactionChatPartner(event, myUsername);
+    const located = findMessageForReaction(chatHistory, messageId, chatPartner);
+    if (!located) return null;
 
-    message.reactions = normalizeReactionsList(event.reactions);
-    return { partner, messageId, message };
+    located.message.reactions = normalizeReactionsList(event.reactions);
+    return {
+        partner: located.partner,
+        messageId,
+        message: located.message,
+        reactions: located.message.reactions,
+    };
+}
+
+/** Optimistic local toggle before server ack (idempotent when sync arrives). */
+export function applyLocalReaction(message, myUsername, emojiOrNull) {
+    let reactions = normalizeReactionsList(message.reactions);
+    reactions = reactions.filter((r) => r.username !== myUsername);
+    if (emojiOrNull) {
+        reactions.push({ username: myUsername, emoji: emojiOrNull });
+    }
+    message.reactions = reactions;
+    return reactions;
 }
 
 export function getReactionCounts(reactions) {

@@ -338,37 +338,11 @@ function buildMessageElement(message, previousMessage = null) {
         row.append(nameEl);
     }
 
+    const contentWrap = document.createElement('div');
+    contentWrap.className = 'message-content-wrap';
+
     const shell = document.createElement('div');
     shell.className = 'message-shell';
-
-    const quickActions = document.createElement('div');
-    quickActions.className = 'message-quick-actions';
-
-    const replyBtn = document.createElement('button');
-    replyBtn.type = 'button';
-    replyBtn.className = 'message-quick-btn';
-    replyBtn.title = 'Reply';
-    replyBtn.textContent = '↩';
-    replyBtn.disabled = !message.id;
-    replyBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (!message.id) return;
-        messageActionHandlers.onReply?.(message);
-    });
-
-    const reactBtn = document.createElement('button');
-    reactBtn.type = 'button';
-    reactBtn.className = 'message-quick-btn';
-    reactBtn.title = 'React';
-    reactBtn.textContent = '☺';
-    reactBtn.disabled = !message.id;
-    reactBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (!message.id) return;
-        messageActionHandlers.onReact?.(message.id, null, event.currentTarget);
-    });
-
-    quickActions.append(replyBtn, reactBtn);
 
     const bubble = document.createElement('div');
     bubble.className = [
@@ -377,9 +351,8 @@ function buildMessageElement(message, previousMessage = null) {
     ].join(' ');
 
     bubble.addEventListener('dblclick', (event) => {
-        event.stopPropagation();
         if (!message.id) return;
-        messageActionHandlers.onReact?.(message.id, null, bubble);
+        messageActionHandlers.onReact?.(message.id, null, event.currentTarget);
     });
 
     const inner = document.createElement('div');
@@ -416,22 +389,65 @@ function buildMessageElement(message, previousMessage = null) {
     inner.append(bodyRow);
     bubble.append(inner);
 
+    shell.append(bubble);
+
+    const hoverActions = document.createElement('div');
+    hoverActions.className = 'message-hover-actions';
+    hoverActions.setAttribute('role', 'group');
+    hoverActions.setAttribute('aria-label', 'Message actions');
+
+    const replyBtn = document.createElement('button');
+    replyBtn.type = 'button';
+    replyBtn.className = 'message-quick-btn';
+    replyBtn.title = 'Reply';
+    replyBtn.textContent = '↩';
+    replyBtn.disabled = !message.id;
+    replyBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+    replyBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!message.id) return;
+        messageActionHandlers.onReply?.(message);
+    });
+
+    const reactBtn = document.createElement('button');
+    reactBtn.type = 'button';
+    reactBtn.className = 'message-quick-btn';
+    reactBtn.title = 'React';
+    reactBtn.textContent = '☺';
+    reactBtn.disabled = !message.id;
+    reactBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+    reactBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!message.id) return;
+        messageActionHandlers.onReact?.(message.id, null, reactBtn);
+    });
+
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
-    deleteBtn.className = 'message-action-btn';
+    deleteBtn.className = 'message-action-btn message-action-btn--delete';
     deleteBtn.textContent = '×';
     deleteBtn.disabled = !message.id;
     deleteBtn.title = message.id ? 'Delete message' : 'Waiting for sync';
-    deleteBtn.addEventListener('click', () => {
+    deleteBtn.addEventListener('mousedown', (event) => event.stopPropagation());
+    deleteBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
         if (!message.id) return;
         messageActionHandlers.onDeleteMessage?.(message.id);
     });
 
-    shell.append(quickActions, bubble, deleteBtn);
-    row.append(shell);
+    if (isOutgoing) {
+        hoverActions.append(deleteBtn, reactBtn, replyBtn);
+    } else {
+        hoverActions.append(replyBtn, reactBtn, deleteBtn);
+    }
+
+    shell.append(hoverActions);
+    contentWrap.append(shell);
 
     const reactionsEl = buildReactionsEl(message);
-    if (reactionsEl) row.append(reactionsEl);
+    if (reactionsEl) contentWrap.append(reactionsEl);
+
+    row.append(contentWrap);
 
     return row;
 }
@@ -453,7 +469,8 @@ export function patchMessageReactionsDom(messageId, reactions, myUsername) {
     );
     if (!row) return;
 
-    let wrap = row.querySelector('.message-reactions');
+    const host = row.querySelector('.message-content-wrap') || row;
+    let wrap = host.querySelector('.message-reactions');
     if (!reactions?.length) {
         wrap?.remove();
         return;
@@ -466,7 +483,7 @@ export function patchMessageReactionsDom(messageId, reactions, myUsername) {
     if (wrap) {
         wrap.replaceWith(next);
     } else {
-        row.append(next);
+        host.append(next);
     }
 }
 

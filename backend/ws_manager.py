@@ -382,16 +382,18 @@ class ConnectionManager:
         if not participants:
             return
 
-        payload = {
-            "type": "reaction_sync",
-            "message_id": result["message_id"],
-            "partner": result["partner"],
-            "username": result["username"],
-            "emoji": result["emoji"],
-            "reactions": result["reactions"],
-        }
+        sender, receiver = participants
         for participant in participants:
-            await self._notify_user(participant, payload)
+            # Each client stores history under their counterparty's username.
+            chat_partner = receiver if participant == sender else sender
+            await self._notify_user(participant, {
+                "type": "reaction_sync",
+                "message_id": result["message_id"],
+                "partner": chat_partner,
+                "username": result["username"],
+                "emoji": result["emoji"],
+                "reactions": result["reactions"],
+            })
 
 
 manager = ConnectionManager()
