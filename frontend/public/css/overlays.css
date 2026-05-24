@@ -4,7 +4,7 @@
     inset: 0;
     pointer-events: none;
     position: fixed;
-    z-index: 200;
+    z-index: 9999;
 }
 
 #ui-overlay-root.is-active {
@@ -61,7 +61,8 @@
     transition-timing-function: ease-out;
 }
 
-.overlay-surface--menu {
+.overlay-surface--menu,
+.overlay-surface--dropdown {
     border-radius: 14px;
     min-width: 200px;
     overflow: hidden;

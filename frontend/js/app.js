@@ -833,16 +833,19 @@ DOM.clearContactSearchBtn.addEventListener('click', () => {
 DOM.refreshUsersBtn.addEventListener('click', refreshUsersDirectory);
 DOM.focusContactsBtn.addEventListener('click', focusContactSearch);
 DOM.focusComposerBtn.addEventListener('click', focusComposer);
-DOM.settingsBtn.addEventListener('click', openSettingsMenu);
-DOM.shortcutsBtn.addEventListener('click', openShortcuts);
+DOM.settingsBtn.addEventListener('click', (event) => openSettingsMenu(event));
+DOM.shortcutsBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openShortcuts();
+});
 DOM.closeSettingsBtn.addEventListener('click', closeModals);
 DOM.closeShortcutsBtn.addEventListener('click', closeModals);
 
 DOM.copyUsernameBtn.addEventListener('click', copyCurrentUsername);
 DOM.logoutBtn.addEventListener('click', handleLogout);
 
-DOM.chatMenuBtn.addEventListener('click', openChatMenu);
-DOM.composerMenuBtn.addEventListener('click', openComposerMenu);
+DOM.chatMenuBtn.addEventListener('click', (event) => openChatMenu(event));
+DOM.composerMenuBtn.addEventListener('click', (event) => openComposerMenu(event));
 DOM.chatSearchBtn.addEventListener('click', openMessageSearch);
 DOM.closeMessageSearchBtn.addEventListener('click', closeMessageSearch);
 DOM.messageSearchInput.addEventListener('input', () => searchMessages(DOM.messageSearchInput.value));

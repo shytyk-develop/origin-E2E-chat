@@ -28,7 +28,7 @@ let actions = {};
 
 let listenersBound = false;
 let onKeyDown = null;
-let onPointerDown = null;
+let onOutsideClick = null;
 let onResize = null;
 let onVisualViewportChange = null;
 let scrollTargets = [];
@@ -193,23 +193,29 @@ export function closeOverlaysForRouteChange() {
 /**
  * @param {Omit<OverlayState, 'generation'>} next
  */
+function replaceOverlay(next) {
+    if (overlayState) {
+        hardDestroy('replace');
+    }
+
+    generation += 1;
+    const gen = generation;
+    ignoreOutsideUntil = Date.now() + OPEN_GUARD_MS;
+
+    overlayState = freezeState(next, gen);
+    overlayDebug('open', {
+        type: next.type,
+        targetId: next.targetId,
+        generation: gen,
+    });
+
+    mountOverlay(gen);
+    return getOverlayState();
+}
+
 export function openOverlay(next) {
     return runLifecycle(async () => {
-        await closeOverlay({ immediate: true, reason: 'replace' });
-
-        generation += 1;
-        const gen = generation;
-        ignoreOutsideUntil = Date.now() + OPEN_GUARD_MS;
-
-        overlayState = freezeState(next, gen);
-        overlayDebug('open', {
-            type: next.type,
-            targetId: next.targetId,
-            generation: gen,
-        });
-
-        mountOverlay(gen);
-        return getOverlayState();
+        replaceOverlay(next);
     });
 }
 
@@ -228,7 +234,7 @@ function mountOverlay(gen) {
     if (needsBackdrop) {
         backdropEl = document.createElement('div');
         backdropEl.className = `overlay-backdrop${overlayState.type === 'modal' ? ' is-modal' : ''}`;
-        backdropEl.addEventListener('mousedown', (event) => {
+        backdropEl.addEventListener('click', (event) => {
             event.stopPropagation();
             closeOverlay({ reason: 'backdrop' });
         });
@@ -237,7 +243,9 @@ function mountOverlay(gen) {
 
     surfaceEl = document.createElement('div');
     const surfaceKind =
-        overlayState.type === 'context' ? 'menu' : overlayState.type;
+        overlayState.type === 'context'
+            ? 'menu'
+            : overlayState.type;
     surfaceEl.className = `overlay-surface overlay-surface--${surfaceKind}`;
     surfaceEl.setAttribute('role', overlayState.type === 'modal' ? 'dialog' : 'menu');
     surfaceEl.setAttribute('aria-modal', overlayState.type === 'modal' ? 'true' : 'false');
@@ -262,13 +270,17 @@ function mountOverlay(gen) {
 
     rootEl.appendChild(surfaceEl);
 
+    layoutSurface(surfaceEl, overlayState);
+
+    // Show immediately (double rAF could skip is-visible on fast re-open).
+    if (overlayState?.generation === gen && surfaceEl) {
+        backdropEl?.classList.add('is-visible');
+        surfaceEl.classList.add('is-visible');
+    }
+
     openFrame = window.requestAnimationFrame(() => {
-        openFrame = window.requestAnimationFrame(() => {
-            if (overlayState?.generation !== gen || !surfaceEl) return;
-            layoutSurface(surfaceEl, overlayState);
-            backdropEl?.classList.add('is-visible');
-            surfaceEl.classList.add('is-visible');
-        });
+        if (overlayState?.generation !== gen || !surfaceEl) return;
+        layoutSurface(surfaceEl, overlayState);
     });
 }
 
@@ -322,21 +334,29 @@ function eventComposedPath(event) {
     return [event.target];
 }
 
-function handlePointerDown(event) {
-    if (!overlayState || isClosing) return;
-    if (Date.now() < ignoreOutsideUntil) return;
+function shouldIgnoreOutsideInteraction(event) {
+    if (!overlayState || isClosing) return true;
+    if (Date.now() < ignoreOutsideUntil) return true;
 
     const path = eventComposedPath(event);
 
-    if (surfaceEl && path.includes(surfaceEl)) return;
+    if (surfaceEl && path.includes(surfaceEl)) return true;
 
     const anchorId = overlayState.payload?.anchorId;
     if (anchorId) {
         const anchor = document.getElementById(anchorId);
-        if (anchor && path.includes(anchor)) return;
+        if (anchor && path.includes(anchor)) return true;
     }
 
+    return false;
+}
+
+function handleOutsideClick(event) {
+    if (shouldIgnoreOutsideInteraction(event)) return;
+
+    const path = eventComposedPath(event);
     if (backdropEl && path.includes(backdropEl)) {
+        closeOverlay({ reason: 'backdrop' });
         return;
     }
 
@@ -359,12 +379,13 @@ function bindGlobalListeners() {
     listenersBound = true;
 
     onKeyDown = handleKeyDown;
-    onPointerDown = handlePointerDown;
+    onOutsideClick = handleOutsideClick;
     onResize = handleViewportChange;
     onVisualViewportChange = handleViewportChange;
 
     document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('mousedown', onPointerDown, true);
+    // Bubble phase: runs after the trigger button's click handler opens the menu.
+    document.addEventListener('click', onOutsideClick, false);
     window.addEventListener('resize', onResize, { passive: true });
     window.visualViewport?.addEventListener('resize', onVisualViewportChange);
     window.visualViewport?.addEventListener('scroll', onVisualViewportChange);
@@ -391,7 +412,7 @@ export function teardownOverlayManager() {
     listenersBound = false;
 
     document.removeEventListener('keydown', onKeyDown, true);
-    document.removeEventListener('mousedown', onPointerDown, true);
+    document.removeEventListener('click', onOutsideClick, false);
     window.removeEventListener('resize', onResize);
     window.visualViewport?.removeEventListener('resize', onVisualViewportChange);
     window.visualViewport?.removeEventListener('scroll', onVisualViewportChange);
@@ -400,7 +421,7 @@ export function teardownOverlayManager() {
     scrollTargets = [];
 
     onKeyDown = null;
-    onPointerDown = null;
+    onOutsideClick = null;
     onResize = null;
     onVisualViewportChange = null;
 }

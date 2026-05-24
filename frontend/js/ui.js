@@ -469,28 +469,28 @@ export function scrollMessagesToBottom() {
     DOM.messagesDiv.scrollTop = DOM.messagesDiv.scrollHeight;
 }
 
-export function openChatMenu() {
+function openMenuDropdown(menuId, anchor, targetId) {
+    if (!anchor) return;
     openDropdown({
-        menuId: 'chat-header',
-        anchor: DOM.chatMenuBtn,
-        targetId: 'chat-header',
+        menuId,
+        anchor,
+        targetId,
     });
 }
 
-export function openComposerMenu() {
-    openDropdown({
-        menuId: 'composer',
-        anchor: DOM.composerMenuBtn,
-        targetId: 'composer',
-    });
+export function openChatMenu(event) {
+    event?.stopPropagation();
+    openMenuDropdown('chat-header', DOM.chatMenuBtn, 'chat-header');
 }
 
-export function openSettingsMenu() {
-    openDropdown({
-        menuId: 'settings',
-        anchor: DOM.settingsBtn,
-        targetId: 'settings',
-    });
+export function openComposerMenu(event) {
+    event?.stopPropagation();
+    openMenuDropdown('composer', DOM.composerMenuBtn, 'composer');
+}
+
+export function openSettingsMenu(event) {
+    event?.stopPropagation();
+    openMenuDropdown('settings', DOM.settingsBtn, 'settings');
 }
 
 export function closeAllPopovers() {
