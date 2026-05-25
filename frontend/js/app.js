@@ -25,7 +25,6 @@ import {
     openSettingsMenu,
     closeAllPopovers,
     openChatInfoPopover,
-    openAppearancePopover,
     initMessageContextMenu,
     initMessageActions,
     highlightMessageRow,
@@ -33,6 +32,7 @@ import {
     closeMessageSearch,
     searchMessages,
     openSettings,
+    openProfile,
     openShortcuts,
     closeModals,
     closeTransientUi,
@@ -45,6 +45,8 @@ import {
     removeMessageFromDom,
     setMessageActionHandlers,
     setRealtimeContext,
+    setUiPreferences,
+    updateProfileRailButton,
     showComposerReplyBar,
     hideComposerReplyBar,
     patchMessageReactionsDom,
@@ -105,6 +107,8 @@ import {
 import { saveHistory, loadHistory, saveKeys, loadKeys, saveDraft, loadDraft, clearDraft } from './storage.js';
 import { initRouter, navigateTo } from './router.js';
 import { loadPreferences, applyPreferences, updatePreference } from './preferences.js';
+import { initProfileSettings } from './profileSettings.js';
+import { getPrivacyFlags, isChatMuted, toggleChatMuted } from './privacy.js';
 import { registerShortcuts } from './shortcuts.js';
 import {
     buildChatTranscript,
@@ -134,6 +138,7 @@ let realtime = null;
 let state = {
     myUsername: null,
     myKeys: null,
+    myPublicKeyJwk: null,
     token: null,
     currentTargetUser: null,
     usersDirectory: {},
@@ -152,6 +157,10 @@ function syncRealtimeUi() {
         unreadCounts: state.unreadCounts,
         typingUsers: state.typingUsers,
     });
+}
+
+function syncUiPreferences() {
+    setUiPreferences(state.preferences);
 }
 
 function ensureRealtime() {
@@ -418,6 +427,8 @@ function markActiveChatRead() {
     ensureRealtime().clearUnread(partner);
     sendChatFocus(partner);
 
+    if (!getPrivacyFlags(state.preferences).readReceipts) return;
+
     scheduleReadReceipt(
         partner,
         (p, upToId) => ensureRealtime().sendReadReceipt(p, upToId),
@@ -427,10 +438,50 @@ function markActiveChatRead() {
 
 applyPreferences(state.preferences);
 setPreferenceControls(state.preferences);
+syncUiPreferences();
 resetChatPanel();
 clearUsersList();
 
 initOverlayManager();
+
+initProfileSettings({
+    getUsername: () => state.myUsername,
+    getPublicKeyJwk: () => state.myPublicKeyJwk,
+    ensurePublicKeyJwk: async () => {
+        if (state.myPublicKeyJwk) return state.myPublicKeyJwk;
+        const saved = loadKeys(state.myUsername);
+        if (saved?.publicKey) {
+            state.myPublicKeyJwk = saved.publicKey;
+            return saved.publicKey;
+        }
+        return null;
+    },
+    getPreferences: () => state.preferences,
+    onPreferenceChange: (key, value) => {
+        state.preferences = updatePreference(state.preferences, key, value);
+        setPreferenceControls(state.preferences);
+        syncUiPreferences();
+        if (key === 'linkPreviews' && state.currentTargetUser) {
+            renderMessagesList(state.chatHistory[state.currentTargetUser] || []);
+        }
+        if (key === 'typingIndicators' && !value) {
+            ensureRealtime().stopTyping();
+            state.typingUsers = new Set();
+            syncRealtimeUi();
+        }
+        showToast('Privacy setting applied.', 'success');
+    },
+    onProfileSaved: () => {
+        updateProfileRailButton(state.myUsername);
+    },
+    onHistoryCleared: () => {
+        state.chatHistory = {};
+        saveChatHistory();
+        resetChatPanel();
+        renderSidebar();
+    },
+    showToast,
+});
 
 registerOverlayActions({
     'chat.search': () => openMessageSearch(),
@@ -443,12 +494,18 @@ registerOverlayActions({
             showToast('Select a chat first.', 'error');
             return;
         }
+        const partner = state.currentTargetUser;
         openChatInfoPopover(
-            state.currentTargetUser,
-            isUserOnline(state, state.currentTargetUser)
+            partner,
+            isUserOnline(state, partner),
+            state.usersDirectory[partner] || null,
+            {
+                preferences: state.preferences,
+                muted: isChatMuted(state.myUsername, partner),
+            }
         );
     },
-    'settings.appearance': () => openAppearancePopover(state.preferences.theme),
+    'chat.mute': () => toggleCurrentChatMute(),
     'settings.modal': () => openSettings(),
     'settings.shortcuts': () => openShortcuts(),
     'composer.timestamp': () => {
@@ -635,7 +692,9 @@ async function loadSidebarChats() {
 // Runs after SUCCESSFUL login
 function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat') {
     state.myUsername = username;
+    state.myPublicKeyJwk = exportedPublicKeyJSON;
     state.chatHistory = loadHistory(state.myUsername);
+    updateProfileRailButton(username);
 
     ensureRouter();
     navigateTo(targetPath, handleNavigation);
@@ -673,7 +732,9 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 ensureRealtime().setPresence(data.username, Boolean(data.online));
             }
             else if (data.type === "typing") {
-                ensureRealtime().setTyping(data.from, Boolean(data.is_typing));
+                if (getPrivacyFlags(state.preferences).typingIndicators) {
+                    ensureRealtime().setTyping(data.from, Boolean(data.is_typing));
+                }
             }
             else if (data.type === "new_chat") {
                 handleNewChatEvent(data);
@@ -686,7 +747,7 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 });
 
                 const isActiveChat = state.currentTargetUser === data.from;
-                if (!isActiveChat) {
+                if (!isActiveChat && !isChatMuted(state.myUsername, data.from)) {
                     ensureRealtime().incrementUnread(data.from);
                 }
 
@@ -1019,7 +1080,11 @@ DOM.messageInput.addEventListener('input', () => {
     clearComposerLimitError();
     updateComposerMeta(getComposerValue());
     persistCurrentDraft();
-    if (state.currentTargetUser && getComposerValue().trim()) {
+    if (
+        state.currentTargetUser &&
+        getComposerValue().trim() &&
+        getPrivacyFlags(state.preferences).typingIndicators
+    ) {
         ensureRealtime().notifyTyping(state.currentTargetUser);
     }
 });
@@ -1046,6 +1111,10 @@ DOM.clearContactSearchBtn.addEventListener('click', () => {
 DOM.refreshUsersBtn.addEventListener('click', refreshUsersDirectory);
 DOM.focusContactsBtn.addEventListener('click', focusContactSearch);
 DOM.focusComposerBtn.addEventListener('click', focusComposer);
+DOM.profileBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openProfile();
+});
 DOM.settingsBtn.addEventListener('click', (event) => openSettingsMenu(event));
 DOM.shortcutsBtn.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1085,6 +1154,16 @@ if (DOM.themePicker) {
         showToast('Theme updated.', 'success');
     });
 }
+
+if (DOM.glassPicker) {
+    DOM.glassPicker.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-glass-value]');
+        if (!btn) return;
+        state.preferences = updatePreference(state.preferences, 'glassIntensity', btn.dataset.glassValue);
+        setPreferenceControls(state.preferences);
+        showToast('Glass intensity updated.', 'success');
+    });
+}
 setMessageActionHandlers({
     onDeleteMessage: deleteSingleMessage,
     onReply: (message) => startReplyToMessage({ messageId: message.id }),
@@ -1102,6 +1181,7 @@ registerShortcuts({
         closeMessageSearch();
     },
     openShortcuts,
+    openProfile,
     openSettings,
     openMessageSearch,
     focusContacts: focusContactSearch,
@@ -1178,6 +1258,18 @@ function refreshUsersDirectory() {
     }
 
     performUserSearch(query);
+}
+
+function toggleCurrentChatMute() {
+    const partner = state.currentTargetUser;
+    if (!partner || !state.myUsername) {
+        showToast('Select a chat first.', 'error');
+        return;
+    }
+    const muted = toggleChatMuted(state.myUsername, partner);
+    closeAllPopovers();
+    showToast(muted ? 'Chat muted locally.' : 'Chat unmuted.', 'success');
+    syncRealtimeUi();
 }
 
 async function copyCurrentUsername() {

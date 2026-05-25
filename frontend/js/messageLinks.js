@@ -123,7 +123,13 @@ export function messageContainsLink(text) {
 /**
  * Build safe DOM for message body text (text nodes + <a>, no innerHTML).
  */
-export function appendLinkedTextContent(container, text) {
+export function appendLinkedTextContent(container, text, options = {}) {
+    const linkify = options.linkify !== false;
+    if (!linkify || !text) {
+        container.appendChild(document.createTextNode(text || ''));
+        return;
+    }
+
     const links = findLinksInText(text);
     if (!links.length) {
         container.appendChild(document.createTextNode(text));

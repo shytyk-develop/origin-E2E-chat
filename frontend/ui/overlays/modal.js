@@ -1,11 +1,19 @@
-// Modal dialogs — portals existing settings / shortcuts panels.
+// Modal dialogs — portals existing settings / shortcuts / profile panels.
 
+import { onProfilePanelOpen } from '../../js/profileSettings.js';
 import { closeOverlay } from './overlayManager.js';
 
 const holderId = 'ui-overlay-modal-holder';
 const panelIds = {
     settings: 'uiSettingsPanel',
     shortcuts: 'uiShortcutsPanel',
+    profile: 'uiProfilePanel',
+};
+
+const closeButtonSelectors = {
+    settings: '#uiCloseSettingsBtn',
+    shortcuts: '#uiCloseShortcutsBtn',
+    profile: '#uiCloseProfileBtn',
 };
 
 /** @type {Record<string, { panel: HTMLElement, parent: HTMLElement, next: ChildNode|null }>} */
@@ -34,7 +42,12 @@ export function attachModalPanel(modalId, container) {
     panel.classList.add('modal-panel');
     container.appendChild(panel);
 
-    panel.querySelectorAll('#uiCloseSettingsBtn, #uiCloseShortcutsBtn').forEach((closeBtn) => {
+    const closeSel = closeButtonSelectors[modalId];
+    const closeButtons = closeSel
+        ? panel.querySelectorAll(closeSel)
+        : panel.querySelectorAll('[data-overlay-close]');
+
+    closeButtons.forEach((closeBtn) => {
         if (closeBtn.dataset.overlayBound) return;
         closeBtn.dataset.overlayBound = '1';
         closeBtn.addEventListener('click', (event) => {
@@ -42,6 +55,10 @@ export function attachModalPanel(modalId, container) {
             closeOverlay({ reason: 'modal-close-btn' });
         });
     });
+
+    if (modalId === 'profile') {
+        onProfilePanelOpen();
+    }
 }
 
 export function releaseModalPanel(modalId) {

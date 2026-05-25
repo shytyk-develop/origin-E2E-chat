@@ -24,10 +24,10 @@
 
 .mini-icon-btn {
     align-items: center;
-    background: var(--card);
-    border: 1px solid var(--b1);
-    border-radius: var(--r1);
-    color: var(--t3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
     cursor: pointer;
     display: inline-flex;
     flex-shrink: 0;
@@ -35,7 +35,11 @@
     justify-content: center;
     min-width: 28px;
     padding: 0;
-    transition: background 0.16s, border-color 0.16s, color 0.16s, transform 0.1s;
+    transition:
+        background var(--duration-fast) ease,
+        border-color var(--duration-fast) ease,
+        color var(--duration-fast) ease,
+        transform var(--duration-fast) ease;
 }
 
 .mini-icon-btn:hover,
@@ -270,19 +274,23 @@
     z-index: 90;
 }
 
-.modal-panel {
-    background: var(--panel);
-    border: 1px solid var(--b2);
-    border-radius: var(--r3);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.72);
+/* Standalone fallback when not portaled; overlay path uses app-layout.css */
+.modal-panel.hidden {
     left: 50%;
     max-width: min(420px, calc(100vw - 32px));
-    padding: 16px;
     position: fixed;
     top: 50%;
     transform: translate(-50%, -50%);
     width: 420px;
     z-index: 100;
+}
+
+.modal-panel {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-overlay);
+    padding: var(--space-4);
 }
 
 .modal-head {

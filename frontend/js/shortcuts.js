@@ -40,6 +40,12 @@ export function registerShortcuts(actions) {
             return;
         }
 
+        if (primary && event.shiftKey && key === 'p') {
+            event.preventDefault();
+            actions.openProfile?.();
+            return;
+        }
+
         if (primary && event.shiftKey && key === 's') {
             event.preventDefault();
             actions.openSettings?.();

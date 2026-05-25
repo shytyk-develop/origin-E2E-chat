@@ -1,0 +1,120 @@
+/* OriginHub design system — spacing, motion, surfaces, interaction primitives */
+
+:root {
+    /* Layout */
+    --layout-chat-max: 860px;
+    --layout-header-h: 58px;
+    --layout-rail-w: 58px;
+    --layout-sidebar-w: 260px;
+    --layout-gutter-x: clamp(16px, 3vw, 48px);
+
+    /* Spacing scale (4px base) */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 32px;
+
+    /* Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 14px;
+    --radius-xl: 16px;
+    --radius-2xl: 20px;
+    --radius-pill: 999px;
+    --radius-bubble: 18px;
+    --radius-bubble-tail: 4px;
+
+    /* Motion */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-ui: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-fast: 120ms;
+    --duration-normal: 150ms;
+    --duration-slow: 240ms;
+
+    /* Elevation */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.12);
+    --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.14);
+    --shadow-3: 0 12px 40px rgba(0, 0, 0, 0.2);
+    --shadow-overlay: 0 0 0 0.5px color-mix(in srgb, var(--border) 80%, transparent), var(--shadow-3);
+
+    /* Z-index */
+    --z-base: 1;
+    --z-header: 20;
+    --z-welcome: 30;
+    --z-overlay: 9999;
+    --z-overlay-surface: 210;
+
+    /* Legacy radius aliases */
+    --r1: var(--radius-sm);
+    --r2: var(--radius-md);
+    --r3: var(--radius-xl);
+    --r4: var(--radius-2xl);
+
+    /* Typography */
+    --text-xs: 11px;
+    --text-sm: 12.5px;
+    --text-base: 13.5px;
+    --text-md: 15px;
+    --text-lg: 17px;
+    --leading-tight: 1.25;
+    --leading-normal: 1.45;
+}
+
+/* Interactive primitives */
+button,
+[role="button"] {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.interactive-surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    transition:
+        background var(--duration-fast) ease,
+        border-color var(--duration-fast) ease,
+        color var(--duration-fast) ease,
+        box-shadow var(--duration-fast) ease,
+        transform var(--duration-fast) ease;
+}
+
+.interactive-surface:hover {
+    background: var(--hover);
+}
+
+.interactive-surface:active {
+    transform: scale(0.98);
+}
+
+.interactive-surface:focus-visible {
+    box-shadow: 0 0 0 3px var(--accent-10);
+    outline: none;
+}
+
+/* Unified icon buttons */
+.mini-icon-btn,
+.rail-icon-btn,
+.btn-attach,
+.composer-reply-close,
+.profile-copy-btn {
+    transition:
+        background var(--duration-fast) ease,
+        border-color var(--duration-fast) ease,
+        color var(--duration-fast) ease,
+        transform var(--duration-fast) ease,
+        box-shadow var(--duration-fast) ease;
+}
+
+.mini-icon-btn:focus-visible,
+.rail-icon-btn:focus-visible,
+.btn-attach:focus-visible {
+    box-shadow: 0 0 0 3px var(--accent-10);
+    outline: none;
+}
+
+.rail-icon-btn {
+    cursor: pointer;
+}

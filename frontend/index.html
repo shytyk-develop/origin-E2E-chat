@@ -8,12 +8,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/css/design-system.css">
     <link rel="stylesheet" href="/css/features.css">
     <link rel="stylesheet" href="/css/ventura-theme.css">
     <link rel="stylesheet" href="/css/overlays.css">
     <link rel="stylesheet" href="/css/message-features.css">
     <link rel="stylesheet" href="/css/message-links.css">
     <link rel="stylesheet" href="/css/ui-chrome.css">
+    <link rel="stylesheet" href="/css/profile-settings.css">
+    <link rel="stylesheet" href="/css/app-layout.css">
     <script>
         (function () {
             try {
@@ -23,8 +26,10 @@
                     t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 }
                 document.documentElement.setAttribute('data-theme', t);
+                document.documentElement.dataset.glass = p.glassIntensity || 'medium';
             } catch (e) {
                 document.documentElement.setAttribute('data-theme', 'dark');
+                document.documentElement.dataset.glass = 'medium';
             }
         })();
     </script>
@@ -562,18 +567,6 @@
             position: relative;
         }
 
-        .chat-stage {
-            display: flex;
-            flex: 1;
-            flex-direction: column;
-            margin: 0 auto;
-            max-width: 860px;
-            min-height: 0;
-            position: relative;
-            width: 100%;
-            z-index: 5;
-        }
-
         .chat-main::before {
             background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px);
             background-size: 22px 22px;
@@ -582,22 +575,6 @@
             pointer-events: none;
             position: absolute;
             z-index: 0;
-        }
-
-        .chat-header {
-            align-items: center;
-            background: var(--glass);
-            backdrop-filter: blur(24px) saturate(180%);
-            border-bottom: 1px solid var(--b0);
-            display: flex;
-            flex-shrink: 0;
-            gap: 16px;
-            height: 58px;
-            justify-content: space-between;
-            min-width: 0;
-            padding: 0 24px;
-            position: relative;
-            z-index: 20;
         }
 
         .header-left {
@@ -614,18 +591,6 @@
             line-height: 1;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .header-sub {
-            color: var(--t3);
-            font-family: var(--f-mono);
-            font-size: 8px;
-            letter-spacing: 0.12em;
-            margin-top: 4px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            text-transform: uppercase;
             white-space: nowrap;
         }
 
@@ -654,13 +619,6 @@
             background: var(--red-10);
             border-color: var(--red-20);
             color: var(--red);
-        }
-
-        #messages {
-            flex: 1;
-            min-height: 0;
-            position: relative;
-            z-index: 10;
         }
 
         #chat-welcome {
@@ -866,20 +824,8 @@
                 font-size: 12px;
             }
 
-            .chat-header {
-                padding: 0 14px;
-            }
-
             .header-sub {
                 display: none;
-            }
-
-            #messages {
-                padding: 18px 14px 10px;
-            }
-
-            .message-bubble {
-                max-width: 88%;
             }
 
             .input-bar {
@@ -919,10 +865,6 @@
                 height: 52px;
             }
 
-            .chat-header {
-                height: 52px;
-            }
-
             #status {
                 font-size: 8px;
                 letter-spacing: 0.08em;
@@ -933,9 +875,6 @@
                 inset: 0;
             }
 
-            .chat-stage {
-                max-width: 100%;
-            }
         }
     </style>
 </head>
@@ -973,6 +912,11 @@
         <symbol id="icon-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
         <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
         <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/></symbol>
+        <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5.25 3.4 10.15 8 11 4.6-.85 8-5.75 8-11V5l-8-3z"/></symbol>
+        <symbol id="icon-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.75-.15 2.55-.4"/><path d="M22 12c0-1.1-.9-2-2-2h-2a2 2 0 0 1-2-2V6"/></symbol>
+        <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="icon-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></symbol>
     </svg>
 
     <div id="page-chat" class="route-page hidden">
@@ -985,7 +929,8 @@
                 <button id="uiShortcutsBtn" class="rail-icon-btn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-keyboard"/></svg></button>
             </div>
             <div class="rail-bottom">
-                <button id="uiSettingsBtn" class="rail-icon-btn" type="button" title="Interface settings" aria-label="Interface settings"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"/></svg></button>
+                <button id="uiProfileBtn" class="rail-icon-btn" type="button" title="Profile settings" aria-label="Profile settings"><svg class="ui-icon" aria-hidden="true"><use href="#icon-user"/></svg></button>
+                <button id="uiSettingsBtn" class="rail-icon-btn" type="button" title="Interface &amp; shortcuts" aria-label="Interface and shortcuts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"/></svg></button>
                 <div class="e2e-chip">E2E</div>
             </div>
         </div>
@@ -1010,27 +955,27 @@
         </aside>
 
         <main class="chat-main">
-            <div class="chat-header">
-                <div class="header-left">
-                    <span id="chatWithTitle">Select a secure channel</span>
-                    <span id="chatSubtitle" class="header-sub text-sm text-zinc-400">Asymmetric Cryptographic Handshake Tunnel</span>
-                </div>
-                <div class="chat-header-tools">
-                    <span id="status" class="status-offline">Disconnected</span>
-                    <button id="uiChatSearchBtn" class="mini-icon-btn" type="button" title="Search messages" aria-label="Search messages"><svg class="ui-icon" aria-hidden="true"><use href="#icon-search"/></svg></button>
-                    <button id="uiScrollBottomBtn" class="mini-icon-btn" type="button" title="Scroll to bottom" aria-label="Scroll to bottom"><svg class="ui-icon" aria-hidden="true"><use href="#icon-chevron-down"/></svg></button>
-                    <button id="uiChatMenuBtn" class="mini-icon-btn" type="button" title="Chat actions" aria-haspopup="menu" aria-label="Chat actions"><svg class="ui-icon" aria-hidden="true"><use href="#icon-more"/></svg></button>
-                </div>
-            </div>
-
             <div class="chat-stage">
+                <header class="chat-header">
+                    <div class="header-left">
+                        <span id="chatWithTitle">Select a secure channel</span>
+                        <span id="chatSubtitle" class="header-sub">Asymmetric Cryptographic Handshake Tunnel</span>
+                    </div>
+                    <div class="chat-header-tools">
+                        <span id="status" class="status-offline">Disconnected</span>
+                        <button id="uiChatSearchBtn" class="mini-icon-btn" type="button" title="Search messages" aria-label="Search messages"><svg class="ui-icon" aria-hidden="true"><use href="#icon-search"/></svg></button>
+                        <button id="uiScrollBottomBtn" class="mini-icon-btn" type="button" title="Scroll to bottom" aria-label="Scroll to bottom"><svg class="ui-icon" aria-hidden="true"><use href="#icon-chevron-down"/></svg></button>
+                        <button id="uiChatMenuBtn" class="mini-icon-btn" type="button" title="Chat actions" aria-haspopup="menu" aria-label="Chat actions"><svg class="ui-icon" aria-hidden="true"><use href="#icon-more"/></svg></button>
+                    </div>
+                </header>
+
                 <div id="uiMessageSearchPanel" class="message-search-panel hidden">
                     <input id="uiMessageSearchInput" type="search" placeholder="Search messages" autocomplete="off" spellcheck="false">
                     <span id="uiMessageSearchCount">0 matches</span>
                     <button id="uiCloseMessageSearchBtn" class="mini-icon-btn" type="button" title="Close search" aria-label="Close search"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
                 </div>
 
-                <div id="messages" class="flex flex-col gap-0 overflow-y-auto px-3 py-3" aria-live="polite"></div>
+                <div id="messages" aria-live="polite"></div>
 
                 <div id="chat-welcome">
                     <div class="welcome-lock">ZK</div>
@@ -1088,12 +1033,206 @@
                 <span>Show message timestamps</span>
             </label>
             <div class="toggle-row" style="flex-direction: column; align-items: stretch; cursor: default;">
-                <p class="settings-label">Appearance</p>
+                <p class="settings-label">Theme</p>
                 <div id="uiThemePicker" class="theme-picker" role="group" aria-label="Theme">
                     <button type="button" data-theme-value="light">Light</button>
                     <button type="button" data-theme-value="dark">Dark</button>
                     <button type="button" data-theme-value="system">Auto</button>
                 </div>
+            </div>
+            <div class="toggle-row" style="flex-direction: column; align-items: stretch; cursor: default;">
+                <p class="settings-label">Glass intensity</p>
+                <div id="uiGlassPicker" class="theme-picker" role="group" aria-label="Glass intensity">
+                    <button type="button" data-glass-value="low">Soft</button>
+                    <button type="button" data-glass-value="medium">Balanced</button>
+                    <button type="button" data-glass-value="high">Deep</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="uiProfilePanel" class="modal-panel modal-panel--profile hidden" aria-modal="true" role="dialog" aria-labelledby="uiProfileTitle">
+        <div class="profile-shell">
+            <nav class="profile-nav" aria-label="Profile sections">
+                <button type="button" class="profile-nav-btn is-active" data-profile-nav="identity" aria-current="page">
+                    <svg class="profile-nav-icon ui-icon" aria-hidden="true"><use href="#icon-user"/></svg>
+                    Identity
+                </button>
+                <button type="button" class="profile-nav-btn" data-profile-nav="security">
+                    <svg class="profile-nav-icon ui-icon" aria-hidden="true"><use href="#icon-shield"/></svg>
+                    Security
+                </button>
+                <button type="button" class="profile-nav-btn" data-profile-nav="privacy">
+                    <svg class="profile-nav-icon ui-icon" aria-hidden="true"><use href="#icon-eye"/></svg>
+                    Privacy
+                </button>
+                <button type="button" class="profile-nav-btn" data-profile-nav="data">
+                    <svg class="profile-nav-icon ui-icon" aria-hidden="true"><use href="#icon-database"/></svg>
+                    Data
+                </button>
+            </nav>
+            <div class="profile-main">
+                <header class="profile-head">
+                    <div>
+                        <h2 id="uiProfileTitle">Profile Settings</h2>
+                        <p class="profile-head-sub">Local identity · E2EE-safe</p>
+                    </div>
+                    <button id="uiCloseProfileBtn" class="mini-icon-btn" type="button" title="Close profile" aria-label="Close profile"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
+                </header>
+                <div class="profile-body">
+                    <div data-profile-section="identity">
+                        <h3 class="profile-section-title">Profile identity</h3>
+                        <p class="profile-section-lead">Display name and status stay on this device until shared via future sync.</p>
+                        <div class="profile-identity-grid">
+                            <div>
+                                <div id="uiProfileAvatarZone" class="profile-avatar-zone" role="button" tabindex="0" aria-label="Change avatar">
+                                    <img id="uiProfileAvatarImg" class="hidden" alt="">
+                                    <span id="uiProfileAvatarInitials" class="profile-avatar-initials">?</span>
+                                    <span class="profile-avatar-overlay">Drop image</span>
+                                </div>
+                                <input id="uiProfileAvatarInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp">
+                                <div class="profile-avatar-actions">
+                                    <button id="uiProfileAvatarUploadBtn" class="profile-btn" type="button">Upload</button>
+                                    <button id="uiProfileAvatarRemoveBtn" class="profile-btn profile-btn--ghost" type="button">Remove</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="profile-field">
+                                    <label for="uiProfileDisplayName">Display name</label>
+                                    <input id="uiProfileDisplayName" type="text" maxlength="32" placeholder="Your name" autocomplete="nickname" spellcheck="false">
+                                    <span id="uiProfileNameCount" class="profile-field-meta">0 / 32</span>
+                                </div>
+                                <div class="profile-field">
+                                    <label for="uiProfileBio">Bio / status</label>
+                                    <textarea id="uiProfileBio" rows="3" maxlength="140" placeholder="Available · AFK · Building secure software"></textarea>
+                                    <span id="uiProfileBioCount" class="profile-field-meta">0 / 140</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="profile-preview-card">
+                            <div class="profile-preview-row">
+                                <div id="uiProfileAvatarPreview" class="profile-preview-avatar">
+                                    <img id="uiProfilePreviewImg" class="hidden" alt="">
+                                    <span id="uiProfilePreviewInitials">?</span>
+                                </div>
+                                <div>
+                                    <p id="uiProfilePreviewName" class="profile-preview-name">—</p>
+                                    <p id="uiProfilePreviewBio" class="profile-preview-bio is-placeholder">No status set</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="profile-card" style="margin-top: 16px;">
+                            <div class="profile-id-row">
+                                <span class="profile-id-label">Username</span>
+                                <span id="uiProfileUsername" class="profile-id-value">—</span>
+                                <button id="uiProfileCopyUsername" class="profile-copy-btn" type="button">Copy</button>
+                            </div>
+                            <div class="profile-id-row">
+                                <span class="profile-id-label">User ID</span>
+                                <span id="uiProfileUserId" class="profile-id-value">—</span>
+                                <button id="uiProfileCopyUserId" class="profile-copy-btn" type="button">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div data-profile-section="security" class="hidden">
+                        <h3 class="profile-section-title">Security</h3>
+                        <p class="profile-section-lead">End-to-end encryption is active. Keys never leave this device unencrypted.</p>
+                        <div class="profile-card profile-card-pad profile-security-grid">
+                            <span class="profile-status-pill">E2EE enabled</span>
+                            <span class="profile-status-pill">Secure connection</span>
+                            <span class="profile-status-pill">Session verified</span>
+                        </div>
+                        <div class="profile-card">
+                            <div class="profile-card-pad">
+                                <p class="profile-section-title" style="margin-bottom: 8px;">Encryption fingerprint</p>
+                                <p id="uiProfileFingerprint" class="profile-fingerprint">—</p>
+                                <button id="uiProfileCopyFingerprint" class="profile-copy-btn" type="button" style="margin-top: 10px;">Copy fingerprint</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div data-profile-section="privacy" class="hidden">
+                        <h3 class="profile-section-title">Privacy</h3>
+                        <p class="profile-section-lead">Each option changes how this app behaves on your device right now.</p>
+                        <div class="profile-card profile-toggle-list">
+                            <label class="profile-toggle-row">
+                                <span class="profile-toggle-copy">
+                                    <span class="profile-toggle-label">Show online status</span>
+                                    <span class="profile-toggle-hint" data-privacy-hint="showOnlineStatus"></span>
+                                </span>
+                                <input id="uiPrefShowOnline" type="checkbox" data-pref-key="showOnlineStatus">
+                            </label>
+                            <label class="profile-toggle-row">
+                                <span class="profile-toggle-copy">
+                                    <span class="profile-toggle-label">Read receipts</span>
+                                    <span class="profile-toggle-hint" data-privacy-hint="readReceipts"></span>
+                                </span>
+                                <input id="uiPrefReadReceipts" type="checkbox" data-pref-key="readReceipts">
+                            </label>
+                            <label class="profile-toggle-row">
+                                <span class="profile-toggle-copy">
+                                    <span class="profile-toggle-label">Typing indicators</span>
+                                    <span class="profile-toggle-hint" data-privacy-hint="typingIndicators"></span>
+                                </span>
+                                <input id="uiPrefTypingIndicators" type="checkbox" data-pref-key="typingIndicators">
+                            </label>
+                            <label class="profile-toggle-row">
+                                <span class="profile-toggle-copy">
+                                    <span class="profile-toggle-label">Profile visible to contacts</span>
+                                    <span class="profile-toggle-hint" data-privacy-hint="profileVisible"></span>
+                                </span>
+                                <input id="uiPrefProfileVisible" type="checkbox" data-pref-key="profileVisible">
+                            </label>
+                            <label class="profile-toggle-row">
+                                <span class="profile-toggle-copy">
+                                    <span class="profile-toggle-label">Link previews in messages</span>
+                                    <span class="profile-toggle-hint" data-privacy-hint="linkPreviews"></span>
+                                </span>
+                                <input id="uiPrefLinkPreviews" type="checkbox" data-pref-key="linkPreviews">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div data-profile-section="data" class="hidden">
+                        <h3 class="profile-section-title">Data &amp; storage</h3>
+                        <p class="profile-section-lead">All encrypted data stays in your browser. Nothing is uploaded when you use these actions.</p>
+                        <div class="profile-card">
+                            <div class="profile-stat-row">
+                                <span>Total local storage</span>
+                                <span id="uiProfileStorageUsed">—</span>
+                            </div>
+                            <div class="profile-stat-row">
+                                <span>Chat history</span>
+                                <span id="uiProfileHistorySize">—</span>
+                            </div>
+                            <div class="profile-stat-row">
+                                <span>Encryption keys</span>
+                                <span id="uiProfileKeysSize">—</span>
+                            </div>
+                            <div class="profile-stat-row">
+                                <span>Profile &amp; drafts</span>
+                                <span id="uiProfileMetaSize">—</span>
+                            </div>
+                            <div class="profile-stat-row">
+                                <span>Messages stored</span>
+                                <span id="uiProfileMessageCount">—</span>
+                            </div>
+                            <div class="profile-stat-row">
+                                <span>Active chats</span>
+                                <span id="uiProfileCachedMedia">—</span>
+                            </div>
+                        </div>
+                        <div class="profile-data-actions">
+                            <button id="uiProfileClearCacheBtn" class="profile-btn profile-btn--ghost" type="button">Clear drafts</button>
+                            <button id="uiProfileClearHistoryBtn" class="profile-btn profile-btn--ghost" type="button">Clear chat history</button>
+                            <button id="uiProfileExportDataBtn" class="profile-btn" type="button">Copy storage report</button>
+                        </div>
+                    </div>
+                </div>
+                <footer class="profile-foot">
+                    <button id="uiProfileSaveBtn" class="profile-btn profile-btn--primary" type="button">Save profile</button>
+                </footer>
             </div>
         </div>
     </section>
@@ -1109,6 +1248,7 @@
             <div><span>Focus contacts</span><kbd>Ctrl K</kbd></div>
             <div><span>Search messages</span><kbd>Ctrl Shift F</kbd></div>
             <div><span>Export chat</span><kbd>Ctrl Shift E</kbd></div>
+            <div><span>Profile</span><kbd>Ctrl Shift P</kbd></div>
             <div><span>Settings</span><kbd>Ctrl Shift S</kbd></div>
             <div><span>Composer</span><kbd>Alt M</kbd></div>
         </div>

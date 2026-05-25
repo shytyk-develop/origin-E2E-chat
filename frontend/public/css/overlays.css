@@ -12,14 +12,14 @@
 }
 
 .overlay-backdrop {
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     background: color-mix(in srgb, var(--bg) 40%, transparent);
     inset: 0;
     opacity: 0;
     pointer-events: auto;
     position: fixed;
-    transition: opacity 150ms ease-out;
+    transition: opacity var(--duration-normal) ease-out;
 }
 
 .overlay-backdrop.is-visible {
@@ -35,18 +35,16 @@
     -webkit-backdrop-filter: blur(28px) saturate(180%);
     background: var(--surface-elevated);
     border: 1px solid var(--border);
-    box-shadow:
-        0 0 0 0.5px color-mix(in srgb, var(--border) 80%, transparent),
-        0 12px 40px color-mix(in srgb, var(--bg) 35%, transparent);
+    box-shadow: var(--shadow-overlay);
     opacity: 0;
     pointer-events: auto;
     position: fixed;
-    transform: scale(0.96) translateY(-2px);
+    transform: scale(0.98) translateY(-2px);
     transform-origin: top left;
     transition:
-        opacity 150ms ease-out,
-        transform 150ms ease-out;
-    z-index: 210;
+        opacity var(--duration-normal) var(--ease-ui),
+        transform var(--duration-normal) var(--ease-ui);
+    z-index: var(--z-overlay-surface);
 }
 
 .overlay-surface.is-visible {
@@ -63,21 +61,21 @@
 
 .overlay-surface--menu,
 .overlay-surface--dropdown {
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     min-width: 200px;
     overflow: hidden;
-    padding: 6px;
+    padding: var(--space-2);
 }
 
 .overlay-surface--popover {
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
     max-width: min(360px, calc(100vw - 24px));
-    padding: 14px 16px;
+    padding: var(--space-4);
     width: 320px;
 }
 
 .overlay-surface--modal {
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
     left: 50% !important;
     max-height: min(88vh, 640px);
     max-width: min(440px, calc(100vw - 32px));
@@ -113,19 +111,26 @@
     align-items: center;
     background: transparent;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     color: var(--text);
     cursor: pointer;
     display: flex;
     font-family: inherit;
-    font-size: 13px;
+    font-size: var(--text-sm);
     font-weight: 400;
-    gap: 10px;
-    line-height: 1.25;
-    padding: 9px 12px;
+    gap: var(--space-3);
+    line-height: var(--leading-tight);
+    padding: var(--space-2) var(--space-3);
     text-align: left;
-    transition: background 120ms ease, color 120ms ease;
+    transition:
+        background var(--duration-fast) ease,
+        color var(--duration-fast) ease,
+        transform var(--duration-fast) ease;
     width: 100%;
+}
+
+.overlay-menu-item:active {
+    transform: scale(0.99);
 }
 
 .overlay-menu-item:hover,
@@ -197,5 +202,5 @@
 }
 
 .message-row.is-highlighted .message-bubble {
-    box-shadow: 0 0 0 2px var(--accent-muted);
+    box-shadow: 0 0 0 2px var(--accent-muted), var(--shadow-bubble);
 }

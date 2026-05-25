@@ -1,18 +1,15 @@
-// Anchored popovers — chat info, quick appearance.
+// Anchored popovers — chat info, quick appearance, reactions.
 
 import { closeOverlay } from './overlayManager.js';
 import { QUICK_REACTIONS } from '../../js/messageReactions.js';
+import { computeKeyFingerprint } from '../../js/profile.js';
+import { getPrivacyFlags } from '../../js/privacy.js';
 
 export function renderPopover(container, state, runAction) {
     const { popoverId } = state.payload || {};
 
     if (popoverId === 'chat-info') {
-        renderChatInfo(container, state.payload);
-        return;
-    }
-
-    if (popoverId === 'appearance') {
-        renderAppearanceQuick(container, state.payload, runAction);
+        renderChatInfo(container, state.payload, runAction);
         return;
     }
 
@@ -27,10 +24,10 @@ export function renderPopover(container, state, runAction) {
     container.appendChild(fallback);
 }
 
-function renderChatInfo(container, payload) {
+async function renderChatInfo(container, payload, runAction) {
     const title = document.createElement('h3');
     title.className = 'overlay-popover-title';
-    title.textContent = payload?.partner ? `Chat with ${payload.partner}` : 'Chat info';
+    title.textContent = payload?.partner ? `@${payload.partner}` : 'Chat info';
 
     const body = document.createElement('p');
     body.className = 'overlay-popover-body';
@@ -39,46 +36,32 @@ function renderChatInfo(container, payload) {
     const meta = document.createElement('dl');
     meta.className = 'overlay-popover-meta';
 
-    appendMeta(meta, 'Partner', payload?.partner || '—');
-    appendMeta(meta, 'Status', payload?.online ? 'Online' : 'Offline');
+    const prefs = payload?.preferences || {};
+    const privacy = getPrivacyFlags(prefs);
+
+    appendMeta(meta, 'Partner', payload?.partner ? `@${payload.partner}` : '—');
+    if (privacy.showOnlineStatus) {
+        appendMeta(meta, 'Status', payload?.online ? 'Online' : 'Offline');
+    } else {
+        appendMeta(meta, 'Status', 'Hidden (privacy)');
+    }
     appendMeta(meta, 'Encryption', 'AES-GCM-256 + RSA-OAEP-2048');
 
+    if (payload?.muted) {
+        appendMeta(meta, 'Notifications', 'Muted locally');
+    }
+
+    if (payload?.publicKeyJwk) {
+        let fp = 'Unavailable';
+        try {
+            fp = await computeKeyFingerprint(payload.publicKeyJwk);
+        } catch {
+            /* keep fallback */
+        }
+        appendMeta(meta, 'Fingerprint', fp);
+    }
+
     container.append(title, body, meta);
-}
-
-function renderAppearanceQuick(container, payload, runAction) {
-    const title = document.createElement('h3');
-    title.className = 'overlay-popover-title';
-    title.textContent = 'Appearance';
-
-    const row = document.createElement('div');
-    row.className = 'theme-picker';
-    row.setAttribute('role', 'group');
-
-    ['light', 'dark', 'system'].forEach((value) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.themeValue = value;
-        btn.textContent = value === 'system' ? 'Auto' : value.charAt(0).toUpperCase() + value.slice(1);
-        btn.classList.toggle('is-active', payload?.theme === value);
-        btn.addEventListener('click', () => {
-            closeOverlay({ reason: 'theme-pick' });
-            runAction('theme.set', { theme: value });
-        });
-        row.append(btn);
-    });
-
-    const more = document.createElement('button');
-    more.type = 'button';
-    more.className = 'overlay-menu-item';
-    more.style.marginTop = '10px';
-    more.textContent = 'All interface settings…';
-    more.addEventListener('click', () => {
-        closeOverlay({ reason: 'open-settings' });
-        runAction('settings.modal', {});
-    });
-
-    container.append(title, row, more);
 }
 
 function renderReactionPicker(container, payload, runAction) {

@@ -160,16 +160,18 @@
 /* Side gutter actions — beside bubble, never on top of text */
 .message-hover-actions {
     align-items: center;
-    align-self: center;
     display: flex;
     flex-shrink: 0;
-    gap: 4px;
+    gap: var(--space-1);
     opacity: 0;
     pointer-events: none;
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    transition: opacity 140ms ease, visibility 140ms ease;
+    transition:
+        opacity var(--duration-fast) ease,
+        visibility var(--duration-fast) ease,
+        transform var(--duration-fast) ease;
     visibility: hidden;
     white-space: nowrap;
     z-index: 4;
@@ -185,12 +187,11 @@
 
 /* Incoming: free space on the right of bubble */
 .message-row--other .message-hover-actions {
-    left: calc(100% + 8px);
+    left: calc(100% + var(--space-2));
 }
 
-/* Own: free space on the left of bubble */
 .message-row--own .message-hover-actions {
-    right: calc(100% + 8px);
+    right: calc(100% + var(--space-2));
 }
 
 #uiDraftStatus.danger,

@@ -4,7 +4,7 @@ import { closeOverlay } from './overlayManager.js';
 
 const MENUS = {
     'chat-header': [
-        { id: 'chat.mute', label: 'Mute chat', disabled: true },
+        { id: 'chat.mute', label: 'Mute chat' },
         { type: 'separator' },
         { id: 'chat.search', label: 'Search in chat', kbd: '⌘⇧F' },
         { id: 'chat.copyLink', label: 'Copy chat link' },
@@ -16,12 +16,8 @@ const MENUS = {
         { id: 'chat.info', label: 'Chat info' },
     ],
     settings: [
-        { id: 'settings.appearance', label: 'Appearance', kbd: 'Theme' },
-        { id: 'settings.notifications', label: 'Notifications', disabled: true },
-        { id: 'settings.privacy', label: 'Privacy', disabled: true },
-        { id: 'settings.sessions', label: 'Sessions / Devices', disabled: true },
-        { type: 'separator' },
-        { id: 'settings.shortcuts', label: 'Keyboard shortcuts', kbd: '⌘⇧S' },
+        { id: 'settings.modal', label: 'Interface', kbd: '⌘⇧S' },
+        { id: 'settings.shortcuts', label: 'Keyboard shortcuts', kbd: '⌘⇧/' },
     ],
     composer: [
         { id: 'composer.timestamp', label: 'Insert timestamp' },

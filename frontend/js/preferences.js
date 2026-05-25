@@ -5,6 +5,12 @@ export const DEFAULT_PREFERENCES = {
     compactMode: false,
     showTimestamps: true,
     theme: 'system', // 'light' | 'dark' | 'system'
+    glassIntensity: 'medium', // 'low' | 'medium' | 'high'
+    showOnlineStatus: true,
+    readReceipts: true,
+    typingIndicators: true,
+    profileVisible: true,
+    linkPreviews: true,
 };
 
 let systemThemeListener = null;
@@ -50,6 +56,9 @@ export function applyPreferences(preferences) {
     document.body.classList.toggle('ui-hide-times', !preferences.showTimestamps);
     applyTheme(preferences.theme);
     bindSystemThemeListener(preferences.theme);
+
+    const glass = preferences.glassIntensity || 'medium';
+    document.documentElement.dataset.glass = glass;
 }
 
 export function updatePreference(preferences, key, value) {
@@ -58,3 +67,4 @@ export function updatePreference(preferences, key, value) {
     applyPreferences(next);
     return next;
 }
+

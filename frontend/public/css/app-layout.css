@@ -1,0 +1,265 @@
+/* App shell layout — aligned columns, gutters, responsive polish */
+
+/* Chat main column */
+.chat-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* ─── Chat column alignment ─── */
+.chat-stage {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    margin: 0 auto;
+    max-width: var(--layout-chat-max);
+    min-height: 0;
+    position: relative;
+    width: 100%;
+    z-index: var(--z-base);
+}
+
+.chat-header {
+    align-items: center;
+    background: var(--glass);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--space-4);
+    height: var(--layout-header-h);
+    justify-content: space-between;
+    min-width: 0;
+    padding: 0 var(--layout-gutter-x);
+    width: 100%;
+    z-index: var(--z-header);
+}
+
+.message-search-panel {
+    margin: 0;
+    padding: var(--space-3) var(--layout-gutter-x);
+    width: 100%;
+}
+
+#messages {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+    overflow-x: visible;
+    overflow-y: auto;
+    padding: var(--space-5) var(--layout-gutter-x) var(--space-4);
+    position: relative;
+    scroll-behavior: smooth;
+    z-index: var(--z-base);
+}
+
+/* Gutter for hover actions outside bubbles */
+.message-row--own .message-content-wrap {
+    margin-left: 44px;
+}
+
+.message-row--other .message-content-wrap {
+    margin-right: 44px;
+}
+
+/* ─── Composer dock (centered column) ─── */
+.chat-main > .input-bar {
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    padding: var(--space-4) var(--space-6) var(--space-5);
+}
+
+.chat-main > .input-bar .input-row,
+.chat-main > .input-bar .input-meta,
+.chat-main > .input-bar .composer-reply-bar {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: var(--layout-chat-max);
+    width: 100%;
+}
+
+/* ─── Modals portaled into overlay ─── */
+.overlay-surface--modal .modal-panel {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    left: auto;
+    max-width: none;
+    padding: var(--space-4);
+    position: relative;
+    top: auto;
+    transform: none;
+    width: 100%;
+}
+
+.overlay-surface--modal .modal-panel--profile {
+    padding: 0;
+}
+
+.overlay-surface--modal .modal-head {
+    margin: 0 0 var(--space-3);
+    padding-bottom: var(--space-3);
+}
+
+/* ─── Search highlight (no Tailwind) ─── */
+.message-row.is-search-match .message-bubble {
+    box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+.message-row.is-search-hidden {
+    display: none !important;
+}
+
+/* Legacy inline actions — disabled in favor of gutter actions */
+.message-actions {
+    display: none !important;
+}
+
+/* ─── Sidebar / rail rhythm ─── */
+.sidebar-head {
+    height: var(--layout-header-h);
+    padding: 0 var(--space-4);
+}
+
+.nav-rail {
+    padding: var(--space-4) 0;
+    width: var(--layout-rail-w);
+}
+
+.sidebar {
+    width: var(--layout-sidebar-w);
+}
+
+.rail-bottom {
+    gap: var(--space-2);
+}
+
+/* ─── Empty / subtitle typography (no Tailwind) ─── */
+.header-sub,
+.contact-subtitle {
+    color: var(--text-secondary);
+    font-family: var(--f-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    line-height: var(--leading-tight);
+    margin-top: var(--space-1);
+    text-transform: uppercase;
+}
+
+.contact-subtitle {
+    font-family: inherit;
+    font-size: var(--text-xs);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.contact-subtitle.is-typing {
+    color: var(--accent);
+}
+
+.contact-subtitle.is-muted {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.contact-presence.presence-neutral .presence-dot {
+    background: var(--text-secondary);
+    opacity: 0.35;
+}
+
+.typing-dots {
+    align-items: center;
+    display: inline-flex;
+    gap: 3px;
+}
+
+.typing-dots span {
+    animation: typingBounce 1.2s ease-in-out infinite;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    height: 4px;
+    width: 4px;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.15s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes typingBounce {
+    0%,
+    80%,
+    100% {
+        opacity: 0.35;
+        transform: translateY(0);
+    }
+
+    40% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
+}
+
+.overlay-popover-actions {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+
+.overlay-popover-meta dd {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    word-break: break-all;
+}
+
+/* ─── Toast rhythm ─── */
+.toast-region {
+    bottom: var(--space-5);
+    gap: var(--space-2);
+    right: var(--space-5);
+}
+
+.toast {
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    padding: var(--space-3) var(--space-4);
+}
+
+@media (max-width: 760px) {
+    :root {
+        --layout-sidebar-w: 200px;
+        --layout-gutter-x: 14px;
+        --layout-header-h: 52px;
+    }
+
+    .message-row--own .message-content-wrap {
+        margin-left: 36px;
+    }
+
+    .message-row--other .message-content-wrap {
+        margin-right: 36px;
+    }
+
+    .chat-main > .input-bar {
+        padding: var(--space-3) var(--space-4) var(--space-4);
+    }
+}
+
+@media (max-width: 520px) {
+    :root {
+        --layout-sidebar-w: 148px;
+        --layout-gutter-x: 12px;
+    }
+
+    .nav-rail {
+        display: none;
+    }
+}

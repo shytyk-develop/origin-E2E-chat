@@ -13,6 +13,9 @@ import {
     messageContainsLink,
     isSafeWebHref,
 } from './messageLinks.js';
+import { hydrateProfilePrivacy } from './profileSettings.js';
+import { getPrivacyFlags, isChatMuted } from './privacy.js';
+import { getDisplayLabel, loadProfile } from './profile.js';
 
 export const DOM = {
     pageLogin: document.getElementById('page-login'),
@@ -36,6 +39,7 @@ export const DOM = {
     focusContactsBtn: document.getElementById('uiFocusContactsBtn'),
     focusComposerBtn: document.getElementById('uiFocusComposerBtn'),
     shortcutsBtn: document.getElementById('uiShortcutsBtn'),
+    profileBtn: document.getElementById('uiProfileBtn'),
     settingsBtn: document.getElementById('uiSettingsBtn'),
     refreshUsersBtn: document.getElementById('uiRefreshUsersBtn'),
     contactSearchInput: document.getElementById('uiContactSearch'),
@@ -68,6 +72,10 @@ export const DOM = {
     prefCompactMode: document.getElementById('uiPrefCompactMode'),
     prefShowTimestamps: document.getElementById('uiPrefShowTimestamps'),
     themePicker: document.getElementById('uiThemePicker'),
+    glassPicker: document.getElementById('uiGlassPicker'),
+
+    profilePanel: document.getElementById('uiProfilePanel'),
+    closeProfileBtn: document.getElementById('uiCloseProfileBtn'),
 
     shortcutsPanel: document.getElementById('uiShortcutsPanel'),
     closeShortcutsBtn: document.getElementById('uiCloseShortcutsBtn'),
@@ -97,6 +105,15 @@ const realtimeContext = {
     unreadCounts: {},
     typingUsers: new Set(),
 };
+
+let uiPreferences = { linkPreviews: true, showOnlineStatus: true, typingIndicators: true };
+
+export function setUiPreferences(preferences) {
+    uiPreferences = getPrivacyFlags(preferences);
+    hydrateProfilePrivacy(preferences);
+    refreshContactIndicators();
+    refreshChatHeaderSubtitle();
+}
 
 const PRESENCE_ONLINE =
     'h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_2px_rgba(52,211,153,0.35)]';
@@ -205,7 +222,7 @@ export function resetChatPanel() {
     DOM.chatWithTitle.textContent = 'Select a secure channel';
     if (DOM.chatSubtitle) {
         DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
-        DOM.chatSubtitle.className = 'header-sub text-sm text-zinc-400';
+        DOM.chatSubtitle.className = 'header-sub';
     }
     DOM.messagesDiv.innerHTML = '';
     DOM.messageInput.value = '';
@@ -368,7 +385,9 @@ function buildMessageElement(message, previousMessage = null) {
 
     const textEl = document.createElement('span');
     textEl.className = 'message-text';
-    appendLinkedTextContent(textEl, message.text || '');
+    appendLinkedTextContent(textEl, message.text || '', {
+        linkify: uiPreferences.linkPreviews,
+    });
 
     const meta = document.createElement('span');
     meta.className = 'message-meta';
@@ -390,7 +409,7 @@ function buildMessageElement(message, previousMessage = null) {
     bodyRow.append(textEl, meta);
     inner.append(bodyRow);
 
-    if (messageContainsLink(message.text)) {
+    if (uiPreferences.linkPreviews && messageContainsLink(message.text)) {
         inner.append(createLinkSecurityNotice());
     }
 
@@ -838,12 +857,11 @@ export function searchMessages(query) {
     const bubbles = [...DOM.messagesDiv.querySelectorAll('.message-row')];
     let matches = 0;
 
-    bubbles.forEach(bubble => {
-        const haystack = bubble.textContent.toLowerCase();
+    bubbles.forEach((row) => {
+        const haystack = row.textContent.toLowerCase();
         const isMatch = !normalized || haystack.includes(normalized);
-        bubble.classList.toggle('hidden', !isMatch);
-        bubble.classList.toggle('ring-1', Boolean(normalized && isMatch));
-        bubble.classList.toggle('ring-indigo-500/40', Boolean(normalized && isMatch));
+        row.classList.toggle('is-search-hidden', Boolean(normalized && !isMatch));
+        row.classList.toggle('is-search-match', Boolean(normalized && isMatch));
         if (normalized && isMatch) matches += 1;
     });
 
@@ -854,6 +872,10 @@ export function searchMessages(query) {
 
 export function openSettings() {
     openModalOverlay('settings', 'settings');
+}
+
+export function openProfile() {
+    openModalOverlay('profile', 'profile');
 }
 
 export function openShortcuts() {
@@ -868,21 +890,12 @@ export function closeTransientUi() {
     closeOverlay();
 }
 
-export function openChatInfoPopover(partner, online) {
+export function openChatInfoPopover(partner, online, publicKeyJwk = null, extra = {}) {
     openPopoverOverlay({
         popoverId: 'chat-info',
         anchor: DOM.chatMenuBtn,
         targetId: 'chat-info',
-        payload: { partner, online },
-    });
-}
-
-export function openAppearancePopover(theme, anchor = DOM.settingsBtn) {
-    openPopoverOverlay({
-        popoverId: 'appearance',
-        anchor,
-        targetId: 'appearance',
-        payload: { theme },
+        payload: { partner, online, publicKeyJwk, ...extra },
     });
 }
 
@@ -937,6 +950,31 @@ export function setPreferenceControls(preferences) {
             btn.classList.toggle('is-active', btn.dataset.themeValue === preferences.theme);
         });
     }
+
+    syncPickerActive(DOM.themePicker, 'data-theme-value', preferences.theme);
+    syncPickerActive(DOM.glassPicker, 'data-glass-value', preferences.glassIntensity || 'medium');
+    setUiPreferences(preferences);
+}
+
+function syncPickerActive(container, attr, value) {
+    if (!container) return;
+    container.querySelectorAll(`[${attr}]`).forEach((btn) => {
+        btn.classList.toggle('is-active', btn.getAttribute(attr) === value);
+    });
+}
+
+/** Single entry point for profile: nav rail profile button. */
+export function updateProfileRailButton(username) {
+    if (!DOM.profileBtn) return;
+    if (!username) {
+        DOM.profileBtn.title = 'Profile settings';
+        DOM.profileBtn.setAttribute('aria-label', 'Profile settings');
+        return;
+    }
+    const profile = loadProfile(username);
+    const label = getDisplayLabel(username, profile);
+    DOM.profileBtn.title = `${label} (@${username})`;
+    DOM.profileBtn.setAttribute('aria-label', `Profile: ${label}`);
 }
 
 export function setChatToolsEnabled(isEnabled) {
@@ -997,7 +1035,7 @@ function renderFilteredUsers() {
         name.textContent = user.username;
 
         const subtitle = document.createElement('div');
-        subtitle.className = 'contact-subtitle text-xs text-zinc-500';
+        subtitle.className = 'contact-subtitle';
         subtitle.dataset.contactSubtitle = 'true';
         applyContactSubtitle(subtitle, user.username, user);
 
@@ -1064,6 +1102,7 @@ function formatMessageTime(date) {
 }
 
 function getPresenceClasses(username) {
+    if (!uiPreferences.showOnlineStatus) return 'presence-neutral';
     return realtimeContext.onlineUsers.has(username) ? PRESENCE_ONLINE : PRESENCE_OFFLINE;
 }
 
@@ -1073,9 +1112,15 @@ function findContactUser(username) {
 }
 
 function applyContactSubtitle(subtitleEl, username, userHint = null) {
-    if (realtimeContext.typingUsers.has(username)) {
+    if (contactsState.myUsername && isChatMuted(contactsState.myUsername, username)) {
+        subtitleEl.textContent = 'Muted';
+        subtitleEl.className = 'contact-subtitle is-muted';
+        return;
+    }
+
+    if (uiPreferences.typingIndicators && realtimeContext.typingUsers.has(username)) {
         subtitleEl.innerHTML = buildTypingDotsHtml();
-        subtitleEl.className = 'contact-subtitle text-xs text-zinc-400';
+        subtitleEl.className = 'contact-subtitle is-typing';
         return;
     }
 
@@ -1083,15 +1128,11 @@ function applyContactSubtitle(subtitleEl, username, userHint = null) {
     subtitleEl.textContent = user?.last_message_at
         ? formatSidebarTime(user.last_message_at)
         : 'Secure channel';
-    subtitleEl.className = 'contact-subtitle text-xs text-zinc-500';
+    subtitleEl.className = 'contact-subtitle';
 }
 
 function buildTypingDotsHtml() {
-    return `<span class="inline-flex items-center gap-0.5 text-xs text-zinc-400" aria-label="Typing">
-        <span class="h-1 w-1 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.2s]"></span>
-        <span class="h-1 w-1 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.1s]"></span>
-        <span class="h-1 w-1 animate-bounce rounded-full bg-zinc-400"></span>
-    </span>`;
+    return `<span class="typing-dots" aria-label="Typing"><span></span><span></span><span></span></span>`;
 }
 
 function refreshContactIndicators() {
@@ -1133,14 +1174,21 @@ function refreshChatHeaderSubtitle() {
     const partner = contactsState.activeUsername;
     if (!partner) {
         DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
-        DOM.chatSubtitle.className = 'header-sub text-sm text-zinc-400';
+        DOM.chatSubtitle.className = 'header-sub';
         return;
     }
 
-    if (realtimeContext.typingUsers.has(partner)) {
+    if (uiPreferences.typingIndicators && realtimeContext.typingUsers.has(partner)) {
         DOM.chatSubtitle.innerHTML = `<span class="presence-badge presence-badge--typing">
             <span>typing</span>${buildTypingDotsHtml()}
         </span>`;
+        DOM.chatSubtitle.className = 'header-sub';
+        return;
+    }
+
+    if (!uiPreferences.showOnlineStatus) {
+        DOM.chatSubtitle.textContent = 'End-to-end encrypted';
+        DOM.chatSubtitle.className = 'header-sub';
         return;
     }
 
@@ -1148,6 +1196,7 @@ function refreshChatHeaderSubtitle() {
     DOM.chatSubtitle.innerHTML = online
         ? '<span class="presence-badge presence-badge--online"><span class="presence-dot" aria-hidden="true"></span>Online</span>'
         : '<span class="presence-badge presence-badge--offline"><span class="presence-dot" aria-hidden="true"></span>Offline</span>';
+    DOM.chatSubtitle.className = 'header-sub';
 }
 
 function formatMessageStatusIcon(status) {
