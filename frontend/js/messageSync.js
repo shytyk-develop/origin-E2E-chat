@@ -46,17 +46,19 @@ export function findOutgoingMessage(chatHistory, { clientMessageId, messageId, p
 export function applyStatusEvent(chatHistory, event, saveHistory) {
     const { status, client_message_id, message_id, partner, up_to_message_id } = event;
 
-    if (status === MESSAGE_STATUS.READ && partner && up_to_message_id) {
+    if (status === MESSAGE_STATUS.READ && partner && up_to_message_id != null) {
         const messages = chatHistory[partner] || [];
+        const upTo = Number(up_to_message_id);
         let changed = false;
-        messages.forEach(msg => {
-            if (msg.type === 'outgoing' && msg.id && msg.id <= up_to_message_id) {
+        messages.forEach((msg) => {
+            if (msg.type !== 'outgoing' || msg.id == null) return;
+            if (Number(msg.id) <= upTo) {
                 if (applyStatus(msg, MESSAGE_STATUS.READ)) changed = true;
                 updateMessageStatus(msg.clientMessageId, msg.id, MESSAGE_STATUS.READ);
             }
         });
         if (changed && saveHistory) saveHistory();
-        return;
+        return { rerenderPartner: partner };
     }
 
     const message = findOutgoingMessage(chatHistory, {
@@ -76,6 +78,7 @@ export function applyStatusEvent(chatHistory, event, saveHistory) {
         if (saveHistory) saveHistory();
         updateMessageStatus(message.clientMessageId, message.id, message.status);
     }
+    return null;
 }
 
 export function onMessageAck(chatHistory, { client_message_id, id, timestamp }, saveHistory) {
@@ -94,21 +97,22 @@ export function onMessageAck(chatHistory, { client_message_id, id, timestamp }, 
     flushStatusQueue(client_message_id, chatHistory, saveHistory);
 }
 
-export function scheduleReadReceipt(partner, sendReadReceipt, getMessages) {
+export function flushReadReceipt(partner, sendReadReceipt, getMessages) {
     if (!partner) return;
 
     readReceiptPartner = partner;
     window.clearTimeout(readReceiptTimer);
-    readReceiptTimer = window.setTimeout(() => {
-        if (readReceiptPartner !== partner) return;
 
-        const messages = getMessages(partner) || [];
-        const lastAny = [...messages].reverse().find(msg => msg.id);
-        const upToId = lastAny?.id;
-        if (!upToId) return;
+    const messages = getMessages(partner) || [];
+    const lastAny = [...messages].reverse().find((msg) => msg.id != null);
+    if (!lastAny) return;
 
-        sendReadReceipt(partner, upToId);
-    }, 400);
+    sendReadReceipt(partner, lastAny.id);
+}
+
+/** @deprecated Use flushReadReceipt for immediate delivery */
+export function scheduleReadReceipt(partner, sendReadReceipt, getMessages) {
+    flushReadReceipt(partner, sendReadReceipt, getMessages);
 }
 
 export function cancelReadReceipt() {

@@ -37,7 +37,23 @@ class ConnectionManager:
     def _session_username(self, websocket: WebSocket) -> Optional[str]:
         return self.active_connections.get(websocket, {}).get("username")
 
-    async def register_user(self, websocket: WebSocket, username: str, public_key: str):
+    def _visible_online_usernames(self) -> list:
+        visible = []
+        for username in self.online_usernames:
+            ws = self.username_to_websocket.get(username)
+            if not ws:
+                continue
+            if self.active_connections.get(ws, {}).get("share_presence", True):
+                visible.append(username)
+        return sorted(visible)
+
+    async def register_user(
+        self,
+        websocket: WebSocket,
+        username: str,
+        public_key: str,
+        share_presence: bool = True,
+    ):
         previous = self.username_to_websocket.get(username)
         if previous and previous is not websocket:
             await self.disconnect(previous)
@@ -48,14 +64,16 @@ class ConnectionManager:
 
         self.active_connections[websocket]["username"] = username
         self.active_connections[websocket]["public_key"] = public_key
+        self.active_connections[websocket]["share_presence"] = share_presence
         self.username_to_websocket[username] = websocket
         self.online_usernames.add(username)
 
         await self._send_json(websocket, {
             "type": "presence_sync",
-            "online": sorted(self.online_usernames),
+            "online": self._visible_online_usernames() if share_presence else [],
         })
-        await self.broadcast_presence(username, True, exclude=websocket)
+        if share_presence:
+            await self.broadcast_presence(username, True, exclude=websocket)
 
         offline_msgs = await asyncio.to_thread(
             database.get_and_delete_offline_messages, username
@@ -74,6 +92,11 @@ class ConnectionManager:
         return True
 
     async def broadcast_presence(self, username: str, is_online: bool, exclude: Optional[WebSocket] = None):
+        if is_online:
+            ws = self.username_to_websocket.get(username)
+            if ws and not self.active_connections.get(ws, {}).get("share_presence", True):
+                return
+
         payload = {
             "type": "presence",
             "username": username,
@@ -149,6 +172,26 @@ class ConnectionManager:
         }
         for username in {deleted_by, partner}:
             await self._notify_user(username, payload)
+
+    async def handle_presence_setting(self, data: dict, websocket: WebSocket):
+        username = self._session_username(websocket)
+        if not username:
+            return
+
+        session = self.active_connections.get(websocket, {})
+        share_presence = bool(data.get("share_presence", True))
+        was_sharing = session.get("share_presence", True)
+        session["share_presence"] = share_presence
+
+        if was_sharing and not share_presence:
+            await self.broadcast_presence(username, False)
+        elif not was_sharing and share_presence:
+            await self.broadcast_presence(username, True, exclude=websocket)
+
+        await self._send_json(websocket, {
+            "type": "presence_sync",
+            "online": self._visible_online_usernames() if share_presence else [],
+        })
 
     async def handle_typing(self, data: dict, websocket: WebSocket):
         sender = self._session_username(websocket)

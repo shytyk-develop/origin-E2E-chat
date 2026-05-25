@@ -385,9 +385,7 @@ function buildMessageElement(message, previousMessage = null) {
 
     const textEl = document.createElement('span');
     textEl.className = 'message-text';
-    appendLinkedTextContent(textEl, message.text || '', {
-        linkify: uiPreferences.linkPreviews,
-    });
+    appendLinkedTextContent(textEl, message.text || '', { linkify: true });
 
     const meta = document.createElement('span');
     meta.className = 'message-meta';
@@ -409,7 +407,7 @@ function buildMessageElement(message, previousMessage = null) {
     bodyRow.append(textEl, meta);
     inner.append(bodyRow);
 
-    if (uiPreferences.linkPreviews && messageContainsLink(message.text)) {
+    if (messageContainsLink(message.text)) {
         inner.append(createLinkSecurityNotice());
     }
 

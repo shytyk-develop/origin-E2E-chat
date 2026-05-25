@@ -23,24 +23,16 @@ import { getPrivacyFlags } from './privacy.js';
 
 const PRIVACY_HINTS = {
     showOnlineStatus: {
-        on: 'Contacts see Online / Offline in the chat header and sidebar.',
-        off: 'Presence is hidden — header shows “End-to-end encrypted” only.',
+        on: 'Contacts see when you are online; you see their Online / Offline status.',
+        off: 'Nobody sees your online status; you do not see others’ presence (solidarity).',
     },
     readReceipts: {
-        on: 'Read status is sent to partners when you open a chat.',
+        on: 'Partners see read checkmarks as soon as you open their chat.',
         off: 'No read receipts are sent when you view messages.',
     },
     typingIndicators: {
         on: 'Others see when you type; you see their typing indicator.',
         off: 'Typing is not sent or shown anywhere in the app.',
-    },
-    profileVisible: {
-        on: 'Your display name is shown on this device (future: shared with contacts).',
-        off: 'Sidebar shows “Private profile” instead of your display name.',
-    },
-    linkPreviews: {
-        on: 'Links in messages are clickable with a security notice.',
-        off: 'Links appear as plain text without warnings or click-through.',
     },
 };
 
@@ -449,16 +441,27 @@ function clearDrafts() {
     ctx?.showToast?.(n ? `Cleared ${n} draft(s).` : 'No drafts to clear.', 'success');
 }
 
-function clearHistory() {
+async function clearHistory() {
     const username = resolveUsername();
     if (!username) return;
-    if (!window.confirm('Delete all local chat history for this account? Messages cannot be restored from this device.')) {
+    if (
+        !window.confirm(
+            'Delete all conversations on the server for every contact? This removes history for you and your partners and cannot be undone.'
+        )
+    ) {
         return;
     }
-    clearChatHistory(username);
-    ctx?.onHistoryCleared?.();
-    hydrateData(username);
-    ctx?.showToast?.('Local chat history cleared.', 'success');
+    try {
+        if (typeof ctx?.onClearAllHistory === 'function') {
+            await ctx.onClearAllHistory();
+        } else {
+            clearChatHistory(username);
+        }
+        hydrateData(username);
+        ctx?.showToast?.('All chat history deleted.', 'success');
+    } catch (err) {
+        ctx?.showToast?.(err?.message || 'Could not clear chat history.', 'error');
+    }
 }
 
 async function exportStorageReport() {
@@ -520,8 +523,6 @@ export function hydrateProfilePrivacy(preferences) {
         showOnlineStatus: 'uiPrefShowOnline',
         readReceipts: 'uiPrefReadReceipts',
         typingIndicators: 'uiPrefTypingIndicators',
-        profileVisible: 'uiPrefProfileVisible',
-        linkPreviews: 'uiPrefLinkPreviews',
     };
     Object.entries(map).forEach(([key, id]) => {
         const el = $p(id);

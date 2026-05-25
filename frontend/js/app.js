@@ -81,7 +81,7 @@ import {
 import {
     applyStatusEvent,
     onMessageAck,
-    scheduleReadReceipt,
+    flushReadReceipt,
     cancelReadReceipt,
 } from './messageSync.js';
 import {
@@ -420,6 +420,18 @@ function sendChatFocus(partner) {
     sendPacket(socket, 'chat_focus', { partner: partner || null });
 }
 
+function syncPresencePrivacy() {
+    const share = getPrivacyFlags(state.preferences).showOnlineStatus;
+    const socket = getSocket();
+    if (socket) {
+        sendPacket(socket, 'presence_setting', { share_presence: share });
+    }
+    if (!share) {
+        ensureRealtime().setOnlineUsers([]);
+    }
+    syncRealtimeUi();
+}
+
 function markActiveChatRead() {
     const partner = state.currentTargetUser;
     if (!partner) return;
@@ -429,7 +441,7 @@ function markActiveChatRead() {
 
     if (!getPrivacyFlags(state.preferences).readReceipts) return;
 
-    scheduleReadReceipt(
+    flushReadReceipt(
         partner,
         (p, upToId) => ensureRealtime().sendReadReceipt(p, upToId),
         (p) => state.chatHistory[p]
@@ -462,8 +474,8 @@ initProfileSettings({
         state.preferences = updatePreference(state.preferences, key, value);
         setPreferenceControls(state.preferences);
         syncUiPreferences();
-        if (key === 'linkPreviews' && state.currentTargetUser) {
-            renderMessagesList(state.chatHistory[state.currentTargetUser] || []);
+        if (key === 'showOnlineStatus') {
+            syncPresencePrivacy();
         }
         if (key === 'typingIndicators' && !value) {
             ensureRealtime().stopTyping();
@@ -475,11 +487,31 @@ initProfileSettings({
     onProfileSaved: () => {
         updateProfileRailButton(state.myUsername);
     },
-    onHistoryCleared: () => {
+    onClearAllHistory: async () => {
+        const partners = new Set([
+            ...Object.keys(state.chatHistory || {}),
+            ...(state.sidebarChats || []).map((chat) => chat.username),
+        ]);
+        const errors = [];
+        for (const partner of partners) {
+            if (!partner) continue;
+            if (normalizeUsername(partner) === normalizeUsername(state.myUsername)) continue;
+            try {
+                await deleteConversation(state.token, partner);
+            } catch (err) {
+                console.error('Delete conversation failed:', partner, err);
+                errors.push(partner);
+            }
+        }
         state.chatHistory = {};
         saveChatHistory();
+        state.sidebarChats = [];
+        DOM.messagesDiv.innerHTML = '';
         resetChatPanel();
         renderSidebar();
+        if (errors.length) {
+            throw new Error(`Could not delete: ${errors.join(', ')}`);
+        }
     },
     showToast,
 });
@@ -712,7 +744,8 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
             updateStatus("Online", "text-green-500");
             sendPacket(activeSocket, "join", {
                 username: state.myUsername,
-                public_key: exportedPublicKeyJSON
+                public_key: exportedPublicKeyJSON,
+                share_presence: getPrivacyFlags(state.preferences).showOnlineStatus,
             });
             if (state.currentTargetUser) {
                 sendPacket(activeSocket, "chat_focus", { partner: state.currentTargetUser });
@@ -727,10 +760,17 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 });
             }
             else if (data.type === "presence_sync") {
-                ensureRealtime().setOnlineUsers(data.online || []);
+                if (getPrivacyFlags(state.preferences).showOnlineStatus) {
+                    ensureRealtime().setOnlineUsers(data.online || []);
+                } else {
+                    ensureRealtime().setOnlineUsers([]);
+                }
+                syncRealtimeUi();
             }
             else if (data.type === "presence") {
+                if (!getPrivacyFlags(state.preferences).showOnlineStatus) return;
                 ensureRealtime().setPresence(data.username, Boolean(data.online));
+                syncRealtimeUi();
             }
             else if (data.type === "typing") {
                 if (getPrivacyFlags(state.preferences).typingIndicators) {
@@ -817,7 +857,13 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 onMessageAck(state.chatHistory, data, saveChatHistory);
             }
             else if (data.type === "message_status") {
-                applyStatusEvent(state.chatHistory, data, saveChatHistory);
+                const result = applyStatusEvent(state.chatHistory, data, saveChatHistory);
+                if (
+                    result?.rerenderPartner &&
+                    state.currentTargetUser === result.rerenderPartner
+                ) {
+                    renderMessagesList(state.chatHistory[result.rerenderPartner] || []);
+                }
             }
             else if (data.type === "unread_sync") {
                 ensureRealtime().setUnread(data.partner, data.unread_count);

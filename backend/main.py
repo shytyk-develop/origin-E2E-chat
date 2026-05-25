@@ -194,7 +194,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                     await websocket.close(code=1008, reason="Identity theft detected")
                     return
                     
-                await manager.register_user(websocket, username, data["public_key"])
+                await manager.register_user(
+                    websocket,
+                    username,
+                    data["public_key"],
+                    share_presence=bool(data.get("share_presence", True)),
+                )
                 await manager.broadcast_users_list()
                 
             elif data["type"] == "message":
@@ -211,6 +216,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
 
             elif data["type"] == "chat_focus":
                 await manager.handle_chat_focus(data, websocket)
+
+            elif data["type"] == "presence_setting":
+                await manager.handle_presence_setting(data, websocket)
 
             elif data["type"] == "reaction":
                 await manager.handle_reaction(data, websocket)
