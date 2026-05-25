@@ -1,6 +1,6 @@
 // Modal dialogs — portals existing settings / shortcuts / profile panels.
 
-import { onProfilePanelOpen } from '../../js/profileSettings.js';
+import { onProfilePanelOpen, queueProfilePanelRefresh } from '../../js/profileSettings.js';
 import { closeOverlay } from './overlayManager.js';
 
 const holderId = 'ui-overlay-modal-holder';
@@ -58,6 +58,7 @@ export function attachModalPanel(modalId, container) {
 
     if (modalId === 'profile') {
         onProfilePanelOpen();
+        queueProfilePanelRefresh();
     }
 }
 

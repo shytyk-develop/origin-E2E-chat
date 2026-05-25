@@ -955,8 +955,8 @@
         </aside>
 
         <main class="chat-main">
-            <div class="chat-stage">
-                <header class="chat-header">
+            <header class="chat-header">
+                <div class="chat-header-inner">
                     <div class="header-left">
                         <span id="chatWithTitle">Select a secure channel</span>
                         <span id="chatSubtitle" class="header-sub">Asymmetric Cryptographic Handshake Tunnel</span>
@@ -967,8 +967,10 @@
                         <button id="uiScrollBottomBtn" class="mini-icon-btn" type="button" title="Scroll to bottom" aria-label="Scroll to bottom"><svg class="ui-icon" aria-hidden="true"><use href="#icon-chevron-down"/></svg></button>
                         <button id="uiChatMenuBtn" class="mini-icon-btn" type="button" title="Chat actions" aria-haspopup="menu" aria-label="Chat actions"><svg class="ui-icon" aria-hidden="true"><use href="#icon-more"/></svg></button>
                     </div>
-                </header>
+                </div>
+            </header>
 
+            <div class="chat-stage">
                 <div id="uiMessageSearchPanel" class="message-search-panel hidden">
                     <input id="uiMessageSearchInput" type="search" placeholder="Search messages" autocomplete="off" spellcheck="false">
                     <span id="uiMessageSearchCount">0 matches</span>
@@ -1124,12 +1126,12 @@
                         <div class="profile-card" style="margin-top: 16px;">
                             <div class="profile-id-row">
                                 <span class="profile-id-label">Username</span>
-                                <span id="uiProfileUsername" class="profile-id-value">—</span>
+                                <span id="uiProfileUsername" class="profile-id-value">Loading…</span>
                                 <button id="uiProfileCopyUsername" class="profile-copy-btn" type="button">Copy</button>
                             </div>
                             <div class="profile-id-row">
                                 <span class="profile-id-label">User ID</span>
-                                <span id="uiProfileUserId" class="profile-id-value">—</span>
+                                <span id="uiProfileUserId" class="profile-id-value">Loading…</span>
                                 <button id="uiProfileCopyUserId" class="profile-copy-btn" type="button">Copy</button>
                             </div>
                         </div>
@@ -1146,7 +1148,7 @@
                         <div class="profile-card">
                             <div class="profile-card-pad">
                                 <p class="profile-section-title" style="margin-bottom: 8px;">Encryption fingerprint</p>
-                                <p id="uiProfileFingerprint" class="profile-fingerprint">—</p>
+                                <p id="uiProfileFingerprint" class="profile-fingerprint">Loading…</p>
                                 <button id="uiProfileCopyFingerprint" class="profile-copy-btn" type="button" style="margin-top: 10px;">Copy fingerprint</button>
                             </div>
                         </div>
@@ -1200,27 +1202,27 @@
                         <div class="profile-card">
                             <div class="profile-stat-row">
                                 <span>Total local storage</span>
-                                <span id="uiProfileStorageUsed">—</span>
+                                <span id="uiProfileStorageUsed">Loading…</span>
                             </div>
                             <div class="profile-stat-row">
                                 <span>Chat history</span>
-                                <span id="uiProfileHistorySize">—</span>
+                                <span id="uiProfileHistorySize">Loading…</span>
                             </div>
                             <div class="profile-stat-row">
                                 <span>Encryption keys</span>
-                                <span id="uiProfileKeysSize">—</span>
+                                <span id="uiProfileKeysSize">Loading…</span>
                             </div>
                             <div class="profile-stat-row">
                                 <span>Profile &amp; drafts</span>
-                                <span id="uiProfileMetaSize">—</span>
+                                <span id="uiProfileMetaSize">Loading…</span>
                             </div>
                             <div class="profile-stat-row">
                                 <span>Messages stored</span>
-                                <span id="uiProfileMessageCount">—</span>
+                                <span id="uiProfileMessageCount">Loading…</span>
                             </div>
                             <div class="profile-stat-row">
                                 <span>Active chats</span>
-                                <span id="uiProfileCachedMedia">—</span>
+                                <span id="uiProfileCachedMedia">Loading…</span>
                             </div>
                         </div>
                         <div class="profile-data-actions">

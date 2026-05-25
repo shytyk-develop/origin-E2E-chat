@@ -22,21 +22,28 @@
     z-index: var(--z-base);
 }
 
+/* Full-width header bar; content aligned to chat column */
 .chat-header {
-    align-items: center;
     background: var(--glass);
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     border-bottom: 1px solid var(--border);
-    display: flex;
     flex-shrink: 0;
+    width: 100%;
+    z-index: var(--z-header);
+}
+
+.chat-header-inner {
+    align-items: center;
+    display: flex;
     gap: var(--space-4);
     height: var(--layout-header-h);
     justify-content: space-between;
+    margin: 0 auto;
+    max-width: var(--layout-chat-max);
     min-width: 0;
     padding: 0 var(--layout-gutter-x);
     width: 100%;
-    z-index: var(--z-header);
 }
 
 .message-search-panel {

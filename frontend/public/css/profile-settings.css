@@ -370,10 +370,9 @@
     flex: 1;
     font-family: var(--f-mono, ui-monospace, monospace);
     font-size: 12px;
-    overflow: hidden;
+    min-width: 0;
     text-align: right;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-all;
 }
 
 .profile-copy-btn {
@@ -442,7 +441,12 @@
 
 .profile-stat-row span:last-child {
     color: var(--text);
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
     font-weight: 500;
+    min-width: 4.5em;
+    text-align: right;
 }
 
 .profile-device-row {

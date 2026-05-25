@@ -48,26 +48,55 @@ let ctx = null;
 let draftProfile = null;
 let avatarPreviewUrl = null;
 
+/** Resolve elements inside the profile panel (works when portaled to overlay). */
+function $p(id) {
+    const panel = document.getElementById('uiProfilePanel');
+    if (panel) {
+        const inside = panel.querySelector(`#${CSS.escape(id)}`);
+        if (inside) return inside;
+    }
+    return document.getElementById(id);
+}
+
+function resolveUsername() {
+    const fromCtx = ctx?.getUsername?.();
+    if (fromCtx) return fromCtx;
+    try {
+        return localStorage.getItem('auth_username') || '';
+    } catch {
+        return '';
+    }
+}
+
 export function initProfileSettings(context) {
     ctx = context;
     bindShell();
+}
+
+export function queueProfilePanelRefresh() {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => onProfilePanelOpen());
+    });
 }
 
 function bindShell() {
     const panel = document.getElementById('uiProfilePanel');
     if (!panel) return;
 
+    if (panel.dataset.profileBound) return;
+    panel.dataset.profileBound = '1';
+
     panel.querySelectorAll('[data-profile-nav]').forEach((btn) => {
         btn.addEventListener('click', () => setSection(btn.dataset.profileNav));
     });
 
-    document.getElementById('uiProfileDisplayName')?.addEventListener('input', onIdentityInput);
-    document.getElementById('uiProfileBio')?.addEventListener('input', onIdentityInput);
+    $p('uiProfileDisplayName')?.addEventListener('input', onIdentityInput);
+    $p('uiProfileBio')?.addEventListener('input', onIdentityInput);
 
-    const avatarZone = document.getElementById('uiProfileAvatarZone');
-    const fileInput = document.getElementById('uiProfileAvatarInput');
-    document.getElementById('uiProfileAvatarUploadBtn')?.addEventListener('click', () => fileInput?.click());
-    document.getElementById('uiProfileAvatarRemoveBtn')?.addEventListener('click', removeAvatar);
+    const avatarZone = $p('uiProfileAvatarZone');
+    const fileInput = $p('uiProfileAvatarInput');
+    $p('uiProfileAvatarUploadBtn')?.addEventListener('click', () => fileInput?.click());
+    $p('uiProfileAvatarRemoveBtn')?.addEventListener('click', removeAvatar);
     fileInput?.addEventListener('change', onAvatarFileSelected);
 
     if (avatarZone && fileInput) {
@@ -90,13 +119,13 @@ function bindShell() {
         });
     }
 
-    document.getElementById('uiProfileDisplayName')?.addEventListener('blur', () => saveIdentity(true));
-    document.getElementById('uiProfileBio')?.addEventListener('blur', () => saveIdentity(true));
+    $p('uiProfileDisplayName')?.addEventListener('blur', () => saveIdentity(true));
+    $p('uiProfileBio')?.addEventListener('blur', () => saveIdentity(true));
 
-    document.getElementById('uiProfileSaveBtn')?.addEventListener('click', () => saveIdentity(false));
-    document.getElementById('uiProfileCopyUsername')?.addEventListener('click', copyUsername);
-    document.getElementById('uiProfileCopyUserId')?.addEventListener('click', copyUserId);
-    document.getElementById('uiProfileCopyFingerprint')?.addEventListener('click', copyFingerprint);
+    $p('uiProfileSaveBtn')?.addEventListener('click', () => saveIdentity(false));
+    $p('uiProfileCopyUsername')?.addEventListener('click', copyUsername);
+    $p('uiProfileCopyUserId')?.addEventListener('click', copyUserId);
+    $p('uiProfileCopyFingerprint')?.addEventListener('click', copyFingerprint);
 
     panel.querySelectorAll('[data-pref-key]').forEach((input) => {
         input.addEventListener('change', () => {
@@ -107,19 +136,18 @@ function bindShell() {
         });
     });
 
-    document.getElementById('uiProfileClearCacheBtn')?.addEventListener('click', clearDrafts);
-    document.getElementById('uiProfileClearHistoryBtn')?.addEventListener('click', clearHistory);
-    document.getElementById('uiProfileExportDataBtn')?.addEventListener('click', exportStorageReport);
+    $p('uiProfileClearCacheBtn')?.addEventListener('click', clearDrafts);
+    $p('uiProfileClearHistoryBtn')?.addEventListener('click', clearHistory);
+    $p('uiProfileExportDataBtn')?.addEventListener('click', exportStorageReport);
 }
 
 export function onProfilePanelOpen() {
-    if (!ctx) return;
-    const username = ctx.getUsername?.();
+    const username = resolveUsername();
     draftProfile = loadProfile(username);
     avatarPreviewUrl = draftProfile.avatarDataUrl;
     setSection('identity');
     hydrateIdentity(username);
-    hydrateSecurity();
+    void hydrateSecurity();
     hydratePrivacy();
     hydrateData(username);
 }
@@ -140,13 +168,13 @@ function setSection(id) {
 }
 
 function hydrateIdentity(username) {
-    const displayInput = document.getElementById('uiProfileDisplayName');
-    const bioInput = document.getElementById('uiProfileBio');
+    const displayInput = $p('uiProfileDisplayName');
+    const bioInput = $p('uiProfileBio');
     if (displayInput) displayInput.value = draftProfile.displayName;
     if (bioInput) bioInput.value = draftProfile.bio;
 
-    const usernameEl = document.getElementById('uiProfileUsername');
-    const copyUserBtn = document.getElementById('uiProfileCopyUsername');
+    const usernameEl = $p('uiProfileUsername');
+    const copyUserBtn = $p('uiProfileCopyUsername');
 
     if (!username) {
         if (usernameEl) usernameEl.textContent = 'Not signed in';
@@ -162,8 +190,8 @@ function hydrateIdentity(username) {
 }
 
 async function hydrateUserId(username) {
-    const idEl = document.getElementById('uiProfileUserId');
-    const copyBtn = document.getElementById('uiProfileCopyUserId');
+    const idEl = $p('uiProfileUserId');
+    const copyBtn = $p('uiProfileCopyUserId');
     if (!idEl) return;
 
     if (!username) {
@@ -190,8 +218,8 @@ async function hydrateUserId(username) {
 }
 
 async function hydrateSecurity() {
-    const fpEl = document.getElementById('uiProfileFingerprint');
-    const copyFpBtn = document.getElementById('uiProfileCopyFingerprint');
+    const fpEl = $p('uiProfileFingerprint');
+    const copyFpBtn = $p('uiProfileCopyFingerprint');
     if (!fpEl) return;
 
     const pub = await resolvePublicKeyJwk();
@@ -220,7 +248,20 @@ async function resolvePublicKeyJwk() {
     if (typeof ctx?.ensurePublicKeyJwk === 'function') {
         pub = await ctx.ensurePublicKeyJwk();
     }
-    return pub || null;
+    if (pub) return pub;
+
+    const username = resolveUsername();
+    if (!username) return null;
+    try {
+        const raw = localStorage.getItem(`e2e_keys_${username}`);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            return parsed?.publicKey || null;
+        }
+    } catch {
+        /* ignore */
+    }
+    return null;
 }
 
 function hydratePrivacy() {
@@ -230,7 +271,9 @@ function hydratePrivacy() {
 
 function updatePrivacyHints(preferences) {
     const flags = getPrivacyFlags(preferences);
-    document.querySelectorAll('[data-privacy-hint]').forEach((el) => {
+    const panel = document.getElementById('uiProfilePanel');
+    const scope = panel || document;
+    scope.querySelectorAll('[data-privacy-hint]').forEach((el) => {
         const key = el.dataset.privacyHint;
         const hints = PRIVACY_HINTS[key];
         if (!hints) return;
@@ -241,7 +284,12 @@ function updatePrivacyHints(preferences) {
 
 function hydrateData(username) {
     if (!username) {
-        setText('uiProfileStorageUsed', '—');
+        setText('uiProfileStorageUsed', 'Sign in required');
+        setText('uiProfileHistorySize', '—');
+        setText('uiProfileKeysSize', '—');
+        setText('uiProfileMetaSize', '—');
+        setText('uiProfileMessageCount', '—');
+        setText('uiProfileCachedMedia', '—');
         return;
     }
 
@@ -255,7 +303,7 @@ function hydrateData(username) {
 }
 
 function setText(id, value) {
-    const el = document.getElementById(id);
+    const el = $p(id);
     if (el) el.textContent = value;
 }
 
@@ -266,15 +314,15 @@ function setCopyEnabled(btn, enabled) {
 }
 
 function onIdentityInput() {
-    draftProfile.displayName = document.getElementById('uiProfileDisplayName')?.value || '';
-    draftProfile.bio = document.getElementById('uiProfileBio')?.value || '';
-    updatePreview(ctx?.getUsername?.());
+    draftProfile.displayName = $p('uiProfileDisplayName')?.value || '';
+    draftProfile.bio = $p('uiProfileBio')?.value || '';
+    updatePreview(resolveUsername());
     updateCharCounts();
 }
 
 function updateCharCounts() {
-    const nameCount = document.getElementById('uiProfileNameCount');
-    const bioCount = document.getElementById('uiProfileBioCount');
+    const nameCount = $p('uiProfileNameCount');
+    const bioCount = $p('uiProfileBioCount');
     const nameLen = [...(draftProfile.displayName || '')].length;
     const bioLen = [...(draftProfile.bio || '')].length;
     if (nameCount) nameCount.textContent = `${nameLen} / ${PROFILE_LIMITS.displayName}`;
@@ -283,10 +331,10 @@ function updateCharCounts() {
 
 function updatePreview(username) {
     const label = getDisplayLabel(username, draftProfile);
-    const previewName = document.getElementById('uiProfilePreviewName');
-    const previewBio = document.getElementById('uiProfilePreviewBio');
-    const previewInitials = document.getElementById('uiProfilePreviewInitials');
-    const previewImg = document.getElementById('uiProfilePreviewImg');
+    const previewName = $p('uiProfilePreviewName');
+    const previewBio = $p('uiProfilePreviewBio');
+    const previewInitials = $p('uiProfilePreviewInitials');
+    const previewImg = $p('uiProfilePreviewImg');
 
     if (previewName) previewName.textContent = label;
     if (previewBio) {
@@ -294,16 +342,16 @@ function updatePreview(username) {
         previewBio.classList.toggle('is-placeholder', !draftProfile.bio?.trim());
     }
 
-    const avatarZone = document.getElementById('uiProfileAvatarZone');
-    const previewRing = document.getElementById('uiProfileAvatarPreview');
+    const avatarZone = $p('uiProfileAvatarZone');
+    const previewRing = $p('uiProfileAvatarPreview');
     const hue = getAvatarHue(username);
     avatarZone?.style.setProperty('--avatar-hue', String(hue));
     previewRing?.style.setProperty('--avatar-hue', String(hue));
 
     renderAvatar(
         avatarZone,
-        document.getElementById('uiProfileAvatarInitials'),
-        document.getElementById('uiProfileAvatarImg'),
+        $p('uiProfileAvatarInitials'),
+        $p('uiProfileAvatarImg'),
         username,
         avatarPreviewUrl
     );
@@ -357,7 +405,7 @@ async function processAvatarFile(file) {
     try {
         avatarPreviewUrl = await readAvatarAsDataUrl(file);
         draftProfile.avatarDataUrl = avatarPreviewUrl;
-        updatePreview(ctx?.getUsername?.());
+        updatePreview(resolveUsername());
         ctx?.showToast?.('Avatar updated — saved locally.', 'success');
         saveIdentity(true);
     } catch {
@@ -368,20 +416,20 @@ async function processAvatarFile(file) {
 function removeAvatar() {
     avatarPreviewUrl = null;
     draftProfile.avatarDataUrl = null;
-    updatePreview(ctx?.getUsername?.());
+    updatePreview(resolveUsername());
     saveIdentity(true);
 }
 
 function saveIdentity(silent = false) {
-    const username = ctx?.getUsername?.();
+    const username = resolveUsername();
     if (!username) return;
 
     draftProfile.displayName = sanitizeProfileText(
-        document.getElementById('uiProfileDisplayName')?.value || '',
+        $p('uiProfileDisplayName')?.value || '',
         PROFILE_LIMITS.displayName
     );
     draftProfile.bio = sanitizeProfileText(
-        document.getElementById('uiProfileBio')?.value || '',
+        $p('uiProfileBio')?.value || '',
         PROFILE_LIMITS.bio
     );
     draftProfile.avatarDataUrl = avatarPreviewUrl;
@@ -394,7 +442,7 @@ function saveIdentity(silent = false) {
 }
 
 function clearDrafts() {
-    const username = ctx?.getUsername?.();
+    const username = resolveUsername();
     if (!username) return;
     const n = clearLocalCache(username);
     hydrateData(username);
@@ -402,7 +450,7 @@ function clearDrafts() {
 }
 
 function clearHistory() {
-    const username = ctx?.getUsername?.();
+    const username = resolveUsername();
     if (!username) return;
     if (!window.confirm('Delete all local chat history for this account? Messages cannot be restored from this device.')) {
         return;
@@ -414,7 +462,7 @@ function clearHistory() {
 }
 
 async function exportStorageReport() {
-    const username = ctx?.getUsername?.();
+    const username = resolveUsername();
     if (!username) return;
     try {
         await copyText(buildStorageReport(username));
@@ -425,7 +473,7 @@ async function exportStorageReport() {
 }
 
 async function copyUsername() {
-    const username = ctx?.getUsername?.();
+    const username = resolveUsername();
     if (!username) {
         ctx?.showToast?.('Not signed in.', 'error');
         return;
@@ -434,19 +482,27 @@ async function copyUsername() {
 }
 
 async function copyUserId() {
-    const raw = document.getElementById('uiProfileUserId')?.dataset.raw
-        || document.getElementById('uiProfileUserId')?.textContent;
+    const el = $p('uiProfileUserId');
+    const raw = el?.dataset.raw || el?.textContent;
     await copyField(raw);
 }
 
 async function copyFingerprint() {
-    const raw = document.getElementById('uiProfileFingerprint')?.dataset.raw;
+    const raw = $p('uiProfileFingerprint')?.dataset.raw;
     await copyField(raw);
 }
 
 async function copyField(text) {
     const value = typeof text === 'string' ? text.trim() : '';
-    if (!value || value === '—' || value.startsWith('Not ') || value.startsWith('Could ') || value.startsWith('Keys ') || value.startsWith('Sign ')) {
+    if (
+        !value ||
+        value === '—' ||
+        value === 'Loading…' ||
+        value.startsWith('Not ') ||
+        value.startsWith('Could ') ||
+        value.startsWith('Keys ') ||
+        value.startsWith('Sign ')
+    ) {
         ctx?.showToast?.('Nothing to copy yet.', 'error');
         return;
     }
@@ -468,7 +524,7 @@ export function hydrateProfilePrivacy(preferences) {
         linkPreviews: 'uiPrefLinkPreviews',
     };
     Object.entries(map).forEach(([key, id]) => {
-        const el = document.getElementById(id);
+        const el = $p(id);
         if (el) el.checked = prefs[key] !== false;
     });
 }

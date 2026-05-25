@@ -13,7 +13,7 @@ import {
     messageContainsLink,
     isSafeWebHref,
 } from './messageLinks.js';
-import { hydrateProfilePrivacy } from './profileSettings.js';
+import { hydrateProfilePrivacy, queueProfilePanelRefresh } from './profileSettings.js';
 import { getPrivacyFlags, isChatMuted } from './privacy.js';
 import { getDisplayLabel, loadProfile } from './profile.js';
 
@@ -876,6 +876,7 @@ export function openSettings() {
 
 export function openProfile() {
     openModalOverlay('profile', 'profile');
+    queueProfilePanelRefresh();
 }
 
 export function openShortcuts() {

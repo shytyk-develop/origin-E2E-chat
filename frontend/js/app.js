@@ -445,11 +445,12 @@ clearUsersList();
 initOverlayManager();
 
 initProfileSettings({
-    getUsername: () => state.myUsername,
+    getUsername: () => state.myUsername || localStorage.getItem('auth_username') || '',
     getPublicKeyJwk: () => state.myPublicKeyJwk,
     ensurePublicKeyJwk: async () => {
         if (state.myPublicKeyJwk) return state.myPublicKeyJwk;
-        const saved = loadKeys(state.myUsername);
+        const user = state.myUsername || localStorage.getItem('auth_username');
+        const saved = loadKeys(user);
         if (saved?.publicKey) {
             state.myPublicKeyJwk = saved.publicKey;
             return saved.publicKey;
