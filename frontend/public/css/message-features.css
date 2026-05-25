@@ -48,15 +48,18 @@
 }
 
 .composer-reply-close {
+    align-items: center;
     background: transparent;
     border: none;
     border-radius: 8px;
     color: var(--text-secondary);
     cursor: pointer;
+    display: inline-flex;
     flex-shrink: 0;
-    font-size: 16px;
-    line-height: 1;
-    padding: 4px 8px;
+    font-size: 0;
+    justify-content: center;
+    line-height: 0;
+    padding: 6px;
 }
 
 .composer-reply-close:hover {
@@ -297,6 +300,15 @@
 
 .message-row--other .message-content-wrap .message-reactions {
     justify-content: flex-start;
+}
+
+.message-row.is-actions-pending .message-hover-actions {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.message-row.is-actions-pending .message-reaction-chip {
+    pointer-events: none;
 }
 
 .message-action-btn--delete:hover {

@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="/css/ventura-theme.css">
     <link rel="stylesheet" href="/css/overlays.css">
     <link rel="stylesheet" href="/css/message-features.css">
+    <link rel="stylesheet" href="/css/message-links.css">
+    <link rel="stylesheet" href="/css/ui-chrome.css">
     <script>
         (function () {
             try {
@@ -572,11 +574,6 @@
             z-index: 5;
         }
 
-        .chat-stage .input-bar {
-            padding-left: 12px;
-            padding-right: 12px;
-        }
-
         .chat-main::before {
             background-image: radial-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px);
             background-size: 22px 22px;
@@ -732,8 +729,6 @@
             background: var(--glass);
             backdrop-filter: blur(24px) saturate(180%);
             border-top: 1px solid var(--b0);
-            flex-shrink: 0;
-            padding: 14px 18px;
             position: relative;
             z-index: 20;
         }
@@ -752,13 +747,11 @@
             border-radius: var(--r2);
             color: var(--t3);
             cursor: default;
-            display: flex;
+            display: inline-flex;
             flex-shrink: 0;
-            font-family: var(--f-mono);
-            font-size: 15px;
-            font-weight: 700;
             height: 42px;
             justify-content: center;
+            padding: 0;
             transition: background 0.16s, border-color 0.16s, color 0.16s;
             width: 42px;
         }
@@ -777,26 +770,12 @@
         }
 
         #sendBtn {
-            background: var(--t1);
-            border: none;
-            border-radius: var(--r2);
-            color: var(--void);
             cursor: pointer;
             flex-shrink: 0;
-            font-family: var(--f-mono);
-            font-size: 9.5px;
-            font-weight: 700;
             height: 42px;
-            letter-spacing: 0.14em;
             min-width: 72px;
             padding: 0 20px;
-            text-transform: uppercase;
             transition: background 0.14s, box-shadow 0.14s, transform 0.1s;
-        }
-
-        #sendBtn:hover {
-            background: #ffffff;
-            box-shadow: 0 4px 24px rgba(255, 255, 255, 0.13);
         }
 
         #sendBtn:active {
@@ -983,17 +962,30 @@
         </div>
     </div>
 
+    <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+        <symbol id="icon-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+        <symbol id="icon-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+        <symbol id="icon-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></symbol>
+        <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></symbol>
+        <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></symbol>
+        <symbol id="icon-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></symbol>
+        <symbol id="icon-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+        <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+        <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    </svg>
+
     <div id="page-chat" class="route-page hidden">
         <div class="nav-rail" aria-label="Primary navigation">
             <div class="rail-top">
                 <div class="rail-logo">OH</div>
                 <div class="rail-sep"></div>
-                <button id="uiFocusContactsBtn" class="rail-icon-btn" type="button" title="Focus contacts">M</button>
-                <button id="uiFocusComposerBtn" class="rail-icon-btn" type="button" title="Focus composer">I</button>
-                <button id="uiShortcutsBtn" class="rail-icon-btn" type="button" title="Keyboard shortcuts">?</button>
+                <button id="uiFocusContactsBtn" class="rail-icon-btn" type="button" title="Focus contacts" aria-label="Focus contacts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-users"/></svg></button>
+                <button id="uiFocusComposerBtn" class="rail-icon-btn" type="button" title="Focus composer" aria-label="Focus composer"><svg class="ui-icon" aria-hidden="true"><use href="#icon-message"/></svg></button>
+                <button id="uiShortcutsBtn" class="rail-icon-btn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-keyboard"/></svg></button>
             </div>
             <div class="rail-bottom">
-                <button id="uiSettingsBtn" class="rail-icon-btn" type="button" title="Interface settings">S</button>
+                <button id="uiSettingsBtn" class="rail-icon-btn" type="button" title="Interface settings" aria-label="Interface settings"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"/></svg></button>
                 <div class="e2e-chip">E2E</div>
             </div>
         </div>
@@ -1002,13 +994,13 @@
             <div class="sidebar-head">
                 <span class="sidebar-label">Identity Nodes</span>
                 <div class="sidebar-actions">
-                    <button id="uiRefreshUsersBtn" class="mini-icon-btn" type="button" title="Refresh contacts">R</button>
+                    <button id="uiRefreshUsersBtn" class="mini-icon-btn" type="button" title="Refresh contacts" aria-label="Refresh contacts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button>
                     <div class="online-dot" aria-hidden="true"></div>
                 </div>
             </div>
             <div class="contact-search-wrap">
                 <input id="uiContactSearch" class="contact-search-input" type="search" placeholder="Search nodes" autocomplete="off" spellcheck="false">
-                <button id="uiClearContactSearchBtn" class="mini-icon-btn" type="button" title="Clear search">X</button>
+                <button id="uiClearContactSearchBtn" class="mini-icon-btn" type="button" title="Clear search" aria-label="Clear search"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
             </div>
             <div id="usersList"></div>
             <div class="sidebar-foot">
@@ -1025,9 +1017,9 @@
                 </div>
                 <div class="chat-header-tools">
                     <span id="status" class="status-offline">Disconnected</span>
-                    <button id="uiChatSearchBtn" class="mini-icon-btn" type="button" title="Search messages">F</button>
-                    <button id="uiScrollBottomBtn" class="mini-icon-btn" type="button" title="Scroll to bottom">V</button>
-                    <button id="uiChatMenuBtn" class="mini-icon-btn" type="button" title="Chat actions" aria-haspopup="menu">⋯</button>
+                    <button id="uiChatSearchBtn" class="mini-icon-btn" type="button" title="Search messages" aria-label="Search messages"><svg class="ui-icon" aria-hidden="true"><use href="#icon-search"/></svg></button>
+                    <button id="uiScrollBottomBtn" class="mini-icon-btn" type="button" title="Scroll to bottom" aria-label="Scroll to bottom"><svg class="ui-icon" aria-hidden="true"><use href="#icon-chevron-down"/></svg></button>
+                    <button id="uiChatMenuBtn" class="mini-icon-btn" type="button" title="Chat actions" aria-haspopup="menu" aria-label="Chat actions"><svg class="ui-icon" aria-hidden="true"><use href="#icon-more"/></svg></button>
                 </div>
             </div>
 
@@ -1035,7 +1027,7 @@
                 <div id="uiMessageSearchPanel" class="message-search-panel hidden">
                     <input id="uiMessageSearchInput" type="search" placeholder="Search messages" autocomplete="off" spellcheck="false">
                     <span id="uiMessageSearchCount">0 matches</span>
-                    <button id="uiCloseMessageSearchBtn" class="mini-icon-btn" type="button" title="Close search">X</button>
+                    <button id="uiCloseMessageSearchBtn" class="mini-icon-btn" type="button" title="Close search" aria-label="Close search"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
                 </div>
 
                 <div id="messages" class="flex flex-col gap-0 overflow-y-auto px-3 py-3" aria-live="polite"></div>
@@ -1045,30 +1037,30 @@
                     <p class="welcome-h">No Channel Established</p>
                     <p class="welcome-p">Select an active encryption node from the sidebar to synchronize keys and mount a secure pipeline.</p>
                 </div>
+            </div>
 
-                <div class="input-bar">
-                    <div id="uiReplyBar" class="composer-reply-bar hidden" aria-live="polite">
-                        <div class="composer-reply-accent" aria-hidden="true"></div>
-                        <div class="composer-reply-body">
-                            <p id="uiReplyLabel" class="composer-reply-label">Reply</p>
-                            <p id="uiReplyPreview" class="composer-reply-preview"></p>
-                        </div>
-                        <button id="uiReplyCloseBtn" type="button" class="composer-reply-close" title="Cancel reply">×</button>
+            <div class="input-bar">
+                <div id="uiReplyBar" class="composer-reply-bar hidden" aria-live="polite">
+                    <div class="composer-reply-accent" aria-hidden="true"></div>
+                    <div class="composer-reply-body">
+                        <p id="uiReplyLabel" class="composer-reply-label">Reply</p>
+                        <p id="uiReplyPreview" class="composer-reply-preview"></p>
                     </div>
-                    <div class="input-row">
-                        <button id="uiAttachBtn" class="btn-attach" type="button" title="Add file marker">+</button>
-                        <input id="uiFileInput" class="hidden" type="file" multiple>
-                        <textarea id="messageInput" placeholder="Write an encrypted message..." rows="1" maxlength="2000" disabled></textarea>
-                        <button id="uiComposerMenuBtn" class="btn-attach" type="button" title="Message tools" aria-haspopup="menu">⋯</button>
-                        <button id="sendBtn" type="button" disabled>Send</button>
+                    <button id="uiReplyCloseBtn" type="button" class="composer-reply-close" title="Cancel reply" aria-label="Cancel reply"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
+                </div>
+                <div class="input-row">
+                    <button id="uiAttachBtn" class="btn-attach" type="button" title="Add file marker" aria-label="Add file marker"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus"/></svg></button>
+                    <input id="uiFileInput" class="hidden" type="file" multiple>
+                    <textarea id="messageInput" placeholder="Write an encrypted message..." rows="1" maxlength="2000" disabled></textarea>
+                    <button id="uiComposerMenuBtn" class="btn-attach" type="button" title="Message tools" aria-haspopup="menu" aria-label="Message tools"><svg class="ui-icon" aria-hidden="true"><use href="#icon-more"/></svg></button>
+                    <button id="sendBtn" type="button" disabled>Send</button>
+                </div>
+                <div class="input-meta">
+                    <div class="cipher-info">
+                        <div class="cipher-led" aria-hidden="true"></div>
+                        <span id="uiDraftStatus" class="cipher-label">Cipher Stack: AES-GCM-256 + RSA-OAEP-2048</span>
                     </div>
-                    <div class="input-meta">
-                        <div class="cipher-info">
-                            <div class="cipher-led" aria-hidden="true"></div>
-                            <span id="uiDraftStatus" class="cipher-label">Cipher Stack: AES-GCM-256 + RSA-OAEP-2048</span>
-                        </div>
-                        <span id="uiCharCounter" class="zk-label">0 / 2000</span>
-                    </div>
+                    <span id="uiCharCounter" class="zk-label">0 / 2000</span>
                 </div>
             </div>
         </main>
@@ -1080,7 +1072,7 @@
     <section id="uiSettingsPanel" class="modal-panel hidden" aria-modal="true" role="dialog" aria-labelledby="uiSettingsTitle">
         <div class="modal-head">
             <h2 id="uiSettingsTitle">Interface Settings</h2>
-            <button id="uiCloseSettingsBtn" class="mini-icon-btn" type="button" title="Close settings">X</button>
+            <button id="uiCloseSettingsBtn" class="mini-icon-btn" type="button" title="Close settings" aria-label="Close settings"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
         </div>
         <div class="settings-grid">
             <label class="toggle-row">
@@ -1109,7 +1101,7 @@
     <section id="uiShortcutsPanel" class="modal-panel hidden" aria-modal="true" role="dialog" aria-labelledby="uiShortcutsTitle">
         <div class="modal-head">
             <h2 id="uiShortcutsTitle">Keyboard Shortcuts</h2>
-            <button id="uiCloseShortcutsBtn" class="mini-icon-btn" type="button" title="Close shortcuts">X</button>
+            <button id="uiCloseShortcutsBtn" class="mini-icon-btn" type="button" title="Close shortcuts" aria-label="Close shortcuts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
         </div>
         <div class="shortcut-list">
             <div><span>Send</span><kbd>Enter</kbd></div>

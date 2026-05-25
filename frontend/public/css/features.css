@@ -31,13 +31,10 @@
     cursor: pointer;
     display: inline-flex;
     flex-shrink: 0;
-    font-family: var(--f-mono);
-    font-size: 9px;
-    font-weight: 700;
     height: 28px;
     justify-content: center;
     min-width: 28px;
-    padding: 0 8px;
+    padding: 0;
     transition: background 0.16s, border-color 0.16s, color 0.16s, transform 0.1s;
 }
 
@@ -254,7 +251,8 @@
 #messageInput {
     align-content: center;
     max-height: 132px;
-    overflow-y: auto;
+    overflow-x: hidden;
+    overflow-y: hidden;
     resize: none;
 }
 

@@ -163,7 +163,6 @@ body {
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     border-top: 1px solid var(--border);
-    padding: 14px 12px 16px;
 }
 
 /* ─── Composer (glass textarea) ─── */

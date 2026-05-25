@@ -7,6 +7,12 @@ import {
     openPopoverOverlay,
 } from '../ui/overlays/overlayManager.js';
 import { getMyReaction, getReactionCounts, QUICK_REACTIONS } from './messageReactions.js';
+import {
+    appendLinkedTextContent,
+    createLinkSecurityNotice,
+    messageContainsLink,
+    isSafeWebHref,
+} from './messageLinks.js';
 
 export const DOM = {
     pageLogin: document.getElementById('page-login'),
@@ -190,6 +196,7 @@ export function activateChatPanel(username) {
     setChatToolsEnabled(true);
     setActiveContact(username);
     refreshChatHeaderSubtitle();
+    autoResizeComposer();
     focusComposer();
 }
 
@@ -220,6 +227,10 @@ export function renderMessagesList(messages) {
         DOM.messagesDiv.appendChild(buildMessageElement(message, prev));
     });
     scrollMessagesToBottom();
+}
+
+export function syncAllMessageRowActions() {
+    DOM.messagesDiv.querySelectorAll('.message-row').forEach(syncMessageRowActions);
 }
 
 export function appendMessage(messageOrSender, text, type, timestamp = Date.now(), previousMessage = null) {
@@ -287,11 +298,7 @@ function buildReactionsEl(message) {
             chip.classList.add('is-mine');
         }
         chip.title = 'Toggle reaction';
-        chip.addEventListener('click', (event) => {
-            event.stopPropagation();
-            if (!message.id) return;
-            messageActionHandlers.onReact?.(message.id, emoji);
-        });
+        chip.dataset.emoji = emoji;
 
         const emojiSpan = document.createElement('span');
         emojiSpan.textContent = emoji;
@@ -350,11 +357,6 @@ function buildMessageElement(message, previousMessage = null) {
         isOutgoing ? 'message-bubble--own' : 'message-bubble--other',
     ].join(' ');
 
-    bubble.addEventListener('dblclick', (event) => {
-        if (!message.id) return;
-        messageActionHandlers.onReact?.(message.id, null, event.currentTarget);
-    });
-
     const inner = document.createElement('div');
     inner.className = 'message-bubble-inner';
 
@@ -366,7 +368,7 @@ function buildMessageElement(message, previousMessage = null) {
 
     const textEl = document.createElement('span');
     textEl.className = 'message-text';
-    textEl.textContent = message.text;
+    appendLinkedTextContent(textEl, message.text || '');
 
     const meta = document.createElement('span');
     meta.className = 'message-meta';
@@ -387,6 +389,11 @@ function buildMessageElement(message, previousMessage = null) {
 
     bodyRow.append(textEl, meta);
     inner.append(bodyRow);
+
+    if (messageContainsLink(message.text)) {
+        inner.append(createLinkSecurityNotice());
+    }
+
     bubble.append(inner);
 
     const hoverActions = document.createElement('div');
@@ -397,41 +404,23 @@ function buildMessageElement(message, previousMessage = null) {
     const replyBtn = document.createElement('button');
     replyBtn.type = 'button';
     replyBtn.className = 'message-quick-btn';
+    replyBtn.dataset.action = 'reply';
     replyBtn.title = 'Reply';
     replyBtn.textContent = '↩';
-    replyBtn.disabled = !message.id;
-    replyBtn.addEventListener('mousedown', (event) => event.stopPropagation());
-    replyBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (!message.id) return;
-        messageActionHandlers.onReply?.(message);
-    });
 
     const reactBtn = document.createElement('button');
     reactBtn.type = 'button';
     reactBtn.className = 'message-quick-btn';
+    reactBtn.dataset.action = 'react';
     reactBtn.title = 'React';
     reactBtn.textContent = '☺';
-    reactBtn.disabled = !message.id;
-    reactBtn.addEventListener('mousedown', (event) => event.stopPropagation());
-    reactBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (!message.id) return;
-        messageActionHandlers.onReact?.(message.id, null, reactBtn);
-    });
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'message-action-btn message-action-btn--delete';
+    deleteBtn.dataset.action = 'delete';
     deleteBtn.textContent = '×';
-    deleteBtn.disabled = !message.id;
     deleteBtn.title = message.id ? 'Delete message' : 'Waiting for sync';
-    deleteBtn.addEventListener('mousedown', (event) => event.stopPropagation());
-    deleteBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (!message.id) return;
-        messageActionHandlers.onDeleteMessage?.(message.id);
-    });
 
     if (isOutgoing) {
         hoverActions.append(deleteBtn, reactBtn, replyBtn);
@@ -446,8 +435,111 @@ function buildMessageElement(message, previousMessage = null) {
     if (reactionsEl) contentWrap.append(reactionsEl);
 
     row.append(contentWrap);
+    syncMessageRowActions(row);
 
     return row;
+}
+
+function getRowMessageId(row) {
+    const id = row?.dataset?.messageId;
+    return id != null && id !== '' ? id : null;
+}
+
+/** Enable/disable hover actions from row dataset (after ack / sync). */
+export function syncMessageRowActions(row) {
+    if (!row) return;
+    const hasId = getRowMessageId(row) != null;
+    row.classList.toggle('is-actions-pending', !hasId);
+
+    const replyBtn = row.querySelector('[data-action="reply"]');
+    const reactBtn = row.querySelector('[data-action="react"]');
+    const deleteBtn = row.querySelector('[data-action="delete"]');
+
+    if (replyBtn) {
+        replyBtn.disabled = !hasId;
+        replyBtn.title = hasId ? 'Reply' : 'Waiting for sync';
+    }
+    if (reactBtn) {
+        reactBtn.disabled = !hasId;
+        reactBtn.title = hasId ? 'React' : 'Waiting for sync';
+    }
+    if (deleteBtn) {
+        deleteBtn.disabled = !hasId;
+        deleteBtn.title = hasId ? 'Delete message' : 'Waiting for sync';
+    }
+}
+
+let messageActionsDelegated = false;
+
+/** One listener on #messages — survives rerender and always reads fresh message id. */
+export function initMessageActions() {
+    if (messageActionsDelegated || !DOM.messagesDiv) return;
+    messageActionsDelegated = true;
+
+    DOM.messagesDiv.addEventListener('mousedown', (event) => {
+        if (event.target.closest('[data-action], .message-reaction-chip, .message-bubble')) {
+            event.stopPropagation();
+        }
+    });
+
+    DOM.messagesDiv.addEventListener('click', (event) => {
+        const link = event.target.closest('.message-link');
+        if (link) {
+            event.stopPropagation();
+            const href = link.getAttribute('href');
+            if (!href || !isSafeWebHref(href)) {
+                event.preventDefault();
+            }
+            return;
+        }
+
+        const row = event.target.closest('.message-row');
+        if (!row) return;
+
+        const messageId = getRowMessageId(row);
+        if (!messageId) return;
+
+        if (event.target.closest('[data-action="reply"]')) {
+            event.preventDefault();
+            event.stopPropagation();
+            messageActionHandlers.onReply?.({ id: messageId });
+            return;
+        }
+
+        if (event.target.closest('[data-action="react"]')) {
+            event.preventDefault();
+            event.stopPropagation();
+            const btn = event.target.closest('[data-action="react"]');
+            messageActionHandlers.onReact?.(messageId, null, btn);
+            return;
+        }
+
+        if (event.target.closest('[data-action="delete"]')) {
+            event.preventDefault();
+            event.stopPropagation();
+            messageActionHandlers.onDeleteMessage?.(messageId);
+            return;
+        }
+
+        const chip = event.target.closest('.message-reaction-chip');
+        if (chip?.dataset.emoji) {
+            event.preventDefault();
+            event.stopPropagation();
+            messageActionHandlers.onReact?.(messageId, chip.dataset.emoji);
+        }
+    });
+
+    DOM.messagesDiv.addEventListener('dblclick', (event) => {
+        const row = event.target.closest('.message-row');
+        const bubble = event.target.closest('.message-bubble');
+        if (!row || !bubble) return;
+
+        const messageId = getRowMessageId(row);
+        if (!messageId) return;
+
+        event.stopPropagation();
+        messageActionHandlers.onReact?.(messageId, null, bubble);
+    });
 }
 
 export function scrollToMessageById(messageId) {
@@ -534,12 +626,7 @@ export function updateMessageIdentity(clientMessageId, id, timestamp, status = '
     msgElement.dataset.messageId = String(id);
     msgElement.dataset.messageStatus = status;
     applyPendingVisual(msgElement, status);
-
-    const deleteButton = msgElement.querySelector('.message-action-btn');
-    if (deleteButton) {
-        deleteButton.disabled = false;
-        deleteButton.title = 'Delete message from database';
-    }
+    syncMessageRowActions(msgElement);
 
     const timeElement = msgElement.querySelector('.message-time');
     if (timeElement && timestamp) {
@@ -614,8 +701,8 @@ export function setMessageActionHandlers(handlers) {
 
 export function setComposerValue(text) {
     DOM.messageInput.value = text;
-    autoResizeComposer();
     updateComposerMeta(text);
+    autoResizeComposer();
 }
 
 export function getComposerValue() {
@@ -624,6 +711,7 @@ export function getComposerValue() {
 
 export function clearComposer() {
     setComposerValue('');
+    autoResizeComposer();
     focusComposer();
 }
 
@@ -641,9 +729,12 @@ export function focusContactSearch() {
 export function autoResizeComposer() {
     const minHeight = 42;
     const maxHeight = 132;
-    DOM.messageInput.style.height = 'auto';
-    const nextHeight = Math.min(Math.max(DOM.messageInput.scrollHeight, minHeight), maxHeight);
-    DOM.messageInput.style.height = `${nextHeight}px`;
+    const input = DOM.messageInput;
+    input.style.height = 'auto';
+    const scrollH = input.scrollHeight;
+    const nextHeight = Math.min(Math.max(scrollH, minHeight), maxHeight);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = scrollH > maxHeight ? 'auto' : 'hidden';
 }
 
 export function updateComposerMeta(text) {
@@ -1047,7 +1138,7 @@ function refreshChatHeaderSubtitle() {
     }
 
     if (realtimeContext.typingUsers.has(partner)) {
-        DOM.chatSubtitle.innerHTML = `<span class="inline-flex items-center gap-2 text-sm text-zinc-400">
+        DOM.chatSubtitle.innerHTML = `<span class="presence-badge presence-badge--typing">
             <span>typing</span>${buildTypingDotsHtml()}
         </span>`;
         return;
@@ -1055,8 +1146,8 @@ function refreshChatHeaderSubtitle() {
 
     const online = realtimeContext.onlineUsers.has(partner);
     DOM.chatSubtitle.innerHTML = online
-        ? '<span class="text-sm font-medium text-emerald-400">Online</span>'
-        : '<span class="text-sm font-medium text-red-400">Offline</span>';
+        ? '<span class="presence-badge presence-badge--online"><span class="presence-dot" aria-hidden="true"></span>Online</span>'
+        : '<span class="presence-badge presence-badge--offline"><span class="presence-dot" aria-hidden="true"></span>Offline</span>';
 }
 
 function formatMessageStatusIcon(status) {

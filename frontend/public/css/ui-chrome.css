@@ -1,0 +1,141 @@
+/* Nav, header, composer chrome — icons, full-width input bar, presence */
+
+.ui-icon {
+    display: block;
+    fill: none;
+    flex-shrink: 0;
+    height: 17px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.75;
+    width: 17px;
+}
+
+.btn-attach .ui-icon {
+    height: 18px;
+    width: 18px;
+}
+
+.rail-icon-btn,
+.mini-icon-btn,
+.btn-attach {
+    font-size: 0;
+    line-height: 0;
+}
+
+.rail-icon-btn {
+    color: var(--accent);
+}
+
+/* Full-width composer dock */
+.chat-main > .input-bar {
+    border-bottom: none;
+    border-left: none;
+    border-radius: 20px 20px 0 0;
+    border-right: none;
+    flex-shrink: 0;
+    margin: 0;
+    max-width: none;
+    padding: 14px 24px 18px;
+    width: 100%;
+}
+
+.chat-main > .input-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-main > .input-bar .input-row,
+.chat-main > .input-bar .input-meta {
+    margin: 0 auto;
+    max-width: 860px;
+    width: 100%;
+}
+
+.chat-main > .input-bar .input-meta {
+    margin-top: 2px;
+}
+
+.chat-main > .input-bar .composer-reply-bar {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 860px;
+}
+
+#messageInput {
+    overflow-x: hidden;
+    overflow-y: hidden;
+    resize: none;
+}
+
+/* Presence in chat header */
+.presence-badge {
+    align-items: center;
+    display: inline-flex;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    gap: 6px;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    text-transform: none;
+}
+
+.presence-dot {
+    border-radius: 50%;
+    flex-shrink: 0;
+    height: 7px;
+    width: 7px;
+}
+
+.presence-badge--online {
+    color: var(--green);
+}
+
+.presence-badge--online .presence-dot {
+    background: var(--green);
+    box-shadow: 0 0 0 2px var(--green-20);
+}
+
+.presence-badge--offline {
+    color: var(--text-secondary);
+}
+
+.presence-badge--offline .presence-dot {
+    background: var(--text-secondary);
+    opacity: 0.55;
+}
+
+.presence-badge--typing {
+    color: var(--text-secondary);
+}
+
+/* Send — consistent on light/dark */
+#sendBtn {
+    background: var(--accent) !important;
+    border: none !important;
+    border-radius: 20px !important;
+    color: #fff !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em !important;
+    text-transform: none !important;
+}
+
+#sendBtn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 82%, #000) !important;
+    box-shadow: 0 4px 16px var(--accent-20) !important;
+    color: #fff !important;
+}
+
+[data-theme="light"] #sendBtn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 78%, #000) !important;
+    color: #fff !important;
+}
+
+#sendBtn:disabled {
+    opacity: 0.35 !important;
+}

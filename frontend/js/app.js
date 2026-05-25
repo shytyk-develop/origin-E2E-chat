@@ -27,6 +27,7 @@ import {
     openChatInfoPopover,
     openAppearancePopover,
     initMessageContextMenu,
+    initMessageActions,
     highlightMessageRow,
     openMessageSearch,
     closeMessageSearch,
@@ -508,6 +509,7 @@ initMessageContextMenu((row) => {
         text,
     };
 });
+initMessageActions();
 
 // Main routing handler
 async function handleNavigation(view, param) {
@@ -731,6 +733,17 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                         );
                     }
                     saveChatHistory();
+                    if (
+                        state.currentTargetUser === partner &&
+                        data.client_message_id
+                    ) {
+                        updateMessageIdentity(
+                            data.client_message_id,
+                            data.id,
+                            data.timestamp,
+                            target.status || 'sent'
+                        );
+                    }
                 }
 
                 if (state.currentTargetUser === partner && data.id) {
