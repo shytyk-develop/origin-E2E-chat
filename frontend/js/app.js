@@ -9,6 +9,9 @@ import {
     resetChatPanel,
     appendMessage,
     renderMessagesList,
+    clearMessageView,
+    patchGroupingFromState,
+    patchMessageReplyPreview,
     filterUsers,
     focusComposer,
     focusContactSearch,
@@ -88,9 +91,7 @@ import {
 import {
     applyMessageDeleted,
     applyConversationDeleted,
-    activeChatShouldRefresh,
     logDelete,
-    messageMatchesDeletion,
     resolveDeletionChatPartner,
 } from './messageDelete.js';
 import { connectToServer, sendPacket } from './network.js';
@@ -142,6 +143,7 @@ import { initMiniProfile } from './miniProfile.js';
 let socketConnection = null;
 let routerReady = false;
 let contactSearchTimer = null;
+let saveChatHistoryTimer = null;
 let realtime = null;
 let state = {
     myUsername: null,
@@ -233,7 +235,22 @@ function handleNewChatEvent(data) {
 }
 
 function saveChatHistory() {
-    saveHistory(state.myUsername, state.chatHistory);
+    if (!state.myUsername) return;
+    window.clearTimeout(saveChatHistoryTimer);
+    saveChatHistoryTimer = window.setTimeout(() => {
+        saveHistory(state.myUsername, state.chatHistory);
+        saveChatHistoryTimer = null;
+    }, 120);
+}
+
+function flushChatHistorySave() {
+    if (saveChatHistoryTimer) {
+        window.clearTimeout(saveChatHistoryTimer);
+        saveChatHistoryTimer = null;
+    }
+    if (state.myUsername) {
+        saveHistory(state.myUsername, state.chatHistory);
+    }
 }
 
 function clearPendingReply() {
@@ -327,7 +344,7 @@ function mapDbMessageToLocal(msg, partner) {
 
 function markRepliesUnavailable(partner, deletedMessageId) {
     const messages = state.chatHistory[partner] || [];
-    let updated = false;
+    const affectedIds = [];
     messages.forEach((m) => {
         if (m.replyTo && String(m.replyTo.messageId) === String(deletedMessageId)) {
             m.replyTo = {
@@ -337,10 +354,31 @@ function markRepliesUnavailable(partner, deletedMessageId) {
                 author: m.replyTo.author || '',
                 preview: 'Message deleted',
             };
-            updated = true;
+            if (m.id != null) affectedIds.push(m.id);
         }
     });
-    return updated;
+    return affectedIds;
+}
+
+function patchReplyPreviewsForMessages(partner, messageIds) {
+    const messages = state.chatHistory[partner] || [];
+    messageIds.forEach((id) => {
+        const msg = messages.find((m) => m.id != null && String(m.id) === String(id));
+        if (msg?.replyTo) {
+            patchMessageReplyPreview(msg.id, msg.replyTo);
+        }
+    });
+}
+
+function applyActiveChatMessageDeletion(deletion) {
+    const activeChat = state.currentTargetUser;
+    if (!activeChat) return;
+
+    const removed = removeMessageFromDom(deletion);
+    const messagesAfter = state.chatHistory[activeChat] || [];
+    if (removed) {
+        patchGroupingFromState(messagesAfter);
+    }
 }
 
 function handleMessageDeletedEvent(data) {
@@ -353,21 +391,11 @@ function handleMessageDeletedEvent(data) {
         clientMessageId: data.client_message_id,
     };
 
-    const messagesBefore = activeChat ? [...(state.chatHistory[activeChat] || [])] : [];
-    const foundMessage = messagesBefore.find((m) => messageMatchesDeletion(m, deletion));
-    const shouldRerender =
-        Boolean(foundMessage) ||
-        activeChatShouldRefresh(activeChat, data, state.chatHistory, state.myUsername);
-
-    logDelete('[CURRENT CHAT]', activeChat);
-    logDelete('[RESOLVED CHAT PARTNER]', chatPartner);
-    logDelete('[MESSAGE FOUND in active chat]', Boolean(foundMessage));
-
     const partnerKey = chatPartner || activeChat;
-    const repliesUpdated =
+    const affectedReplyIds =
         partnerKey && data.message_id
             ? markRepliesUnavailable(partnerKey, data.message_id)
-            : false;
+            : [];
 
     const { changed, partner: affectedKey } = applyMessageDeleted(
         state.chatHistory,
@@ -376,23 +404,22 @@ function handleMessageDeletedEvent(data) {
         state.myUsername
     );
 
-    if ((shouldRerender || repliesUpdated) && activeChat === partnerKey) {
-        const messagesAfter = state.chatHistory[activeChat] || [];
-        renderMessagesList(messagesAfter);
-        logDelete('[UI RERENDERED]', { activeChat, count: messagesAfter.length });
+    const activePartner = activeChat && (
+        activeChat === partnerKey ||
+        activeChat === affectedKey ||
+        normalizeUsername(activeChat) === normalizeUsername(partnerKey || '')
+    );
+
+    if (activePartner) {
+        applyActiveChatMessageDeletion(deletion);
+        if (affectedReplyIds.length) {
+            patchReplyPreviewsForMessages(activeChat, affectedReplyIds);
+        }
     } else if (changed) {
-        const domFound = removeMessageFromDom({
-            messageId: data.message_id,
-            clientMessageId: data.client_message_id,
-        });
-        logDelete('[DOM ELEMENT FOUND]', domFound);
+        removeMessageFromDom(deletion);
     }
 
-    if (!changed && !foundMessage) {
-        logDelete('[SKIP] no store change and message not in active chat');
-    } else {
-        logDelete('[STATE UPDATED]', { changed, affectedKey });
-    }
+    logDelete('[STATE UPDATED]', { changed, affectedKey, activePartner, affectedReplyIds });
 }
 
 function handleConversationDeletedEvent(data) {
@@ -414,7 +441,7 @@ function handleConversationDeletedEvent(data) {
     );
 
     if (state.currentTargetUser && normalizeUsername(state.currentTargetUser) === chatPartner) {
-        DOM.messagesDiv.innerHTML = "";
+        clearMessageView();
         clearDraft(state.myUsername, state.currentTargetUser);
         logDelete('[UI CLEARED conversation]', chatPartner);
     }
@@ -538,9 +565,9 @@ initProfileSettings({
             }
         }
         state.chatHistory = {};
-        saveChatHistory();
+        flushChatHistorySave();
         state.sidebarChats = [];
-        DOM.messagesDiv.innerHTML = '';
+        clearMessageView();
         resetChatPanel();
         renderSidebar();
         if (errors.length) {
@@ -888,6 +915,9 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                             data.reply_to_message_id,
                             state.myUsername
                         );
+                        if (state.currentTargetUser === partner && target.id && target.replyTo) {
+                            patchMessageReplyPreview(target.id, target.replyTo);
+                        }
                     }
                     saveChatHistory();
                     if (
@@ -912,13 +942,7 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                 onMessageAck(state.chatHistory, data, saveChatHistory);
             }
             else if (data.type === "message_status") {
-                const result = applyStatusEvent(state.chatHistory, data, saveChatHistory);
-                if (
-                    result?.rerenderPartner &&
-                    state.currentTargetUser === result.rerenderPartner
-                ) {
-                    renderMessagesList(state.chatHistory[result.rerenderPartner] || []);
-                }
+                applyStatusEvent(state.chatHistory, data, saveChatHistory);
             }
             else if (data.type === "unread_sync") {
                 ensureRealtime().setUnread(data.partner, data.unread_count);
@@ -963,6 +987,14 @@ function handleReactionSyncEvent(data) {
     }
 }
 
+function findHistoryMessage(history, message) {
+    if (!Array.isArray(history) || !message) return null;
+    return history.find((item) =>
+        (message.id != null && item.id != null && String(item.id) === String(message.id)) ||
+        (message.clientMessageId && item.clientMessageId === message.clientMessageId)
+    ) || null;
+}
+
 function processMessage(chatPartner, messageInput) {
     if (!state.chatHistory[chatPartner]) {
         state.chatHistory[chatPartner] = [];
@@ -991,14 +1023,42 @@ function processMessage(chatPartner, messageInput) {
         );
     }
 
-    state.chatHistory[chatPartner].push(message);
+    const history = state.chatHistory[chatPartner];
+    const existing = findHistoryMessage(history, message);
+    if (existing) {
+        if (message.status) existing.status = message.status;
+        if (message.text) existing.text = message.text;
+        if (message.timestamp) existing.timestamp = message.timestamp;
+        if (message.id) existing.id = message.id;
+        if (message.replyTo) existing.replyTo = message.replyTo;
+        if (message.reactions?.length) existing.reactions = message.reactions;
+
+        if (state.currentTargetUser === chatPartner && existing.clientMessageId) {
+            if (existing.id) {
+                updateMessageIdentity(
+                    existing.clientMessageId,
+                    existing.id,
+                    existing.timestamp,
+                    existing.status || MESSAGE_STATUS.SENT
+                );
+                if (existing.replyTo) {
+                    patchMessageReplyPreview(existing.id, existing.replyTo);
+                }
+            } else if (existing.status) {
+                updateMessageStatus(existing.clientMessageId, null, existing.status);
+            }
+        }
+        saveChatHistory();
+        return;
+    }
+
+    history.push(message);
 
     if (state.currentTargetUser === chatPartner) {
-        const history = state.chatHistory[chatPartner];
         const prev = history.length > 1 ? history[history.length - 2] : null;
         appendMessage(message, null, null, null, prev);
     }
-    saveHistory(state.myUsername, state.chatHistory);
+    saveChatHistory();
 }
 
 async function ensureUserKey(username) {
@@ -1031,13 +1091,14 @@ async function switchChat(username) {
     }
 
     persistCurrentDraft();
+    flushChatHistorySave();
     cancelReadReceipt();
     clearPendingReply();
     state.currentTargetUser = username;
     sendChatFocus(username);
     activateChatPanel(username);
     DOM.chatWelcome.classList.add('hidden');
-    DOM.messagesDiv.innerHTML = "";
+    clearMessageView();
 
     // --- SECURE LAZY CLOUD SYNCHRONIZATION ---
     // Fetch latest 50 messages slice. Server doesn't know plain text content!
@@ -1068,7 +1129,7 @@ async function switchChat(username) {
     }
     setComposerValue(loadDraft(state.myUsername, username));
     setDraftStatus(getComposerValue() ? "Draft restored locally" : "Cipher Stack: AES-GCM-256 + RSA-OAEP-2048");
-    saveHistory(state.myUsername, state.chatHistory);
+    flushChatHistorySave();
     markActiveChatRead();
     syncRealtimeUi();
 }
@@ -1233,7 +1294,7 @@ DOM.composerMenuBtn.addEventListener('click', (event) => openComposerMenu(event)
 DOM.chatSearchBtn.addEventListener('click', openMessageSearch);
 DOM.closeMessageSearchBtn.addEventListener('click', closeMessageSearch);
 DOM.messageSearchInput.addEventListener('input', () => searchMessages(DOM.messageSearchInput.value));
-DOM.scrollBottomBtn.addEventListener('click', scrollMessagesToBottom);
+DOM.scrollBottomBtn.addEventListener('click', () => scrollMessagesToBottom({ force: true, smooth: true }));
 
 DOM.attachBtn.addEventListener('click', () => DOM.fileInput.click());
 DOM.fileInput.addEventListener('change', () => {
@@ -1443,9 +1504,9 @@ async function clearCurrentChat() {
         await deleteConversation(state.token, partner);
         state.chatHistory[partner] = [];
         state.sidebarChats = state.sidebarChats.filter(chat => chat.username !== partner);
-        DOM.messagesDiv.innerHTML = "";
+        clearMessageView();
         clearDraft(state.myUsername, partner);
-        saveHistory(state.myUsername, state.chatHistory);
+        flushChatHistorySave();
         renderSidebar();
         closeAllPopovers();
         showToast("Chat history deleted from database.", "success");
@@ -1481,8 +1542,11 @@ async function deleteSingleMessage(messageId) {
     };
 
     applyMessageDeleted(state.chatHistory, optimisticEvent, saveChatHistory, state.myUsername);
+    const affectedReplyIds = markRepliesUnavailable(partner, messageId);
     if (state.currentTargetUser === partner) {
-        renderMessagesList(state.chatHistory[partner] || []);
+        removeMessageFromDom({ messageId, clientMessageId });
+        patchReplyPreviewsForMessages(partner, affectedReplyIds);
+        patchGroupingFromState(state.chatHistory[partner] || []);
     }
 
     try {
@@ -1491,7 +1555,7 @@ async function deleteSingleMessage(messageId) {
     } catch (err) {
         console.error("Message delete failed:", err);
         state.chatHistory[partner] = snapshot;
-        saveChatHistory();
+        flushChatHistorySave();
         if (state.currentTargetUser === partner) {
             renderMessagesList(snapshot);
         }
@@ -1503,6 +1567,7 @@ async function deleteSingleMessage(messageId) {
 
 function handleLogout() {
     persistCurrentDraft();
+    flushChatHistorySave();
     closeOverlaysForRouteChange();
 
     if (socketConnection) {

@@ -232,7 +232,7 @@ export function resetChatPanel() {
         DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
         DOM.chatSubtitle.className = 'header-sub';
     }
-    DOM.messagesDiv.innerHTML = '';
+    clearMessageView();
     DOM.messageInput.value = '';
     DOM.messageInput.disabled = true;
     DOM.sendBtn.disabled = true;
@@ -244,14 +244,122 @@ export function resetChatPanel() {
 }
 
 export function renderMessagesList(messages) {
-    DOM.messagesDiv.innerHTML = '';
+    /** Full hydrate — use only on chat switch / initial load. */
+    clearMessageView();
     if (!Array.isArray(messages) || !messages.length) return;
 
     messages.forEach((message, index) => {
         const prev = index > 0 ? messages[index - 1] : null;
         DOM.messagesDiv.appendChild(buildMessageElement(message, prev));
     });
-    scrollMessagesToBottom();
+    scrollMessagesToBottom({ force: true });
+}
+
+export function clearMessageView() {
+    DOM.messagesDiv.innerHTML = '';
+}
+
+const SCROLL_NEAR_BOTTOM_PX = 96;
+
+export function isMessagesNearBottom(threshold = SCROLL_NEAR_BOTTOM_PX) {
+    const el = DOM.messagesDiv;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+}
+
+export function scrollMessagesToBottom(options = {}) {
+    const { force = false, smooth = false } = typeof options === 'boolean'
+        ? { force: options }
+        : options;
+    if (!force && !isMessagesNearBottom()) return;
+
+    if (smooth) {
+        DOM.messagesDiv.scrollTo({
+            top: DOM.messagesDiv.scrollHeight,
+            behavior: 'smooth',
+        });
+    } else {
+        DOM.messagesDiv.scrollTop = DOM.messagesDiv.scrollHeight;
+    }
+}
+
+export function findMessageElement({ messageId, clientMessageId } = {}) {
+    if (clientMessageId) {
+        const byClient = DOM.messagesDiv.querySelector(
+            `[data-client-message-id="${CSS.escape(clientMessageId)}"]`
+        );
+        if (byClient) return byClient;
+    }
+    if (messageId != null) {
+        return DOM.messagesDiv.querySelector(
+            `[data-message-id="${CSS.escape(String(messageId))}"]`
+        );
+    }
+    return null;
+}
+
+export function messageExistsInView(message) {
+    if (!message) return false;
+    return Boolean(
+        findMessageElement({
+            messageId: message.id,
+            clientMessageId: message.clientMessageId,
+        })
+    );
+}
+
+export function patchMessageReplyPreview(messageId, replyTo) {
+    const row = findMessageElement({ messageId });
+    if (!row) return;
+
+    const inner = row.querySelector('.message-bubble-inner');
+    if (!inner) return;
+
+    const existing = inner.querySelector('.message-reply-preview');
+    if (!replyTo) {
+        existing?.remove();
+        return;
+    }
+
+    const next = buildReplyPreviewEl(replyTo);
+    if (!next) return;
+
+    if (existing) {
+        existing.replaceWith(next);
+    } else {
+        inner.prepend(next);
+    }
+}
+
+/** Reconcile sender labels / grouping classes without rebuilding message bubbles. */
+export function patchGroupingFromState(messages) {
+    if (!Array.isArray(messages)) return;
+
+    messages.forEach((message, index) => {
+        const row = findMessageElement({
+            messageId: message.id,
+            clientMessageId: message.clientMessageId,
+        });
+        if (!row) return;
+
+        const prev = index > 0 ? messages[index - 1] : null;
+        const isGrouped = isGroupedWithPrevious(message, prev);
+        const showSenderName = shouldShowSenderName(message, prev);
+
+        row.classList.toggle('message-row--grouped', isGrouped);
+
+        let nameEl = row.querySelector('.message-sender-label');
+        if (showSenderName && message.type !== 'outgoing') {
+            if (!nameEl) {
+                nameEl = document.createElement('div');
+                nameEl.className = 'message-sender-label';
+                row.prepend(nameEl);
+            }
+            nameEl.textContent = message.sender || '';
+        } else {
+            nameEl?.remove();
+        }
+    });
 }
 
 export function syncAllMessageRowActions() {
@@ -262,6 +370,8 @@ export function appendMessage(messageOrSender, text, type, timestamp = Date.now(
     const message = typeof messageOrSender === 'object'
         ? messageOrSender
         : { sender: messageOrSender, text, type, timestamp };
+
+    if (messageExistsInView(message)) return;
 
     if (!previousMessage) {
         const rows = DOM.messagesDiv.querySelectorAll('.message-row');
@@ -689,32 +799,14 @@ function applyPendingVisual(row, status) {
 }
 
 export function removeMessageElement(messageId) {
-    if (messageId == null) return;
-    const msgElement = DOM.messagesDiv.querySelector(`[data-message-id="${CSS.escape(String(messageId))}"]`);
-    msgElement?.remove();
+    removeMessageFromDom({ messageId });
 }
 
 export function removeMessageFromDom({ messageId, clientMessageId } = {}) {
-    let found = false;
-    if (messageId != null) {
-        const el = DOM.messagesDiv.querySelector(
-            `[data-message-id="${CSS.escape(String(messageId))}"]`
-        );
-        if (el) {
-            el.remove();
-            found = true;
-        }
-    }
-    if (clientMessageId) {
-        const byClient = DOM.messagesDiv.querySelector(
-            `[data-client-message-id="${CSS.escape(clientMessageId)}"]`
-        );
-        if (byClient) {
-            byClient.remove();
-            found = true;
-        }
-    }
-    return found;
+    const el = findMessageElement({ messageId, clientMessageId });
+    if (!el) return false;
+    el.remove();
+    return true;
 }
 
 export function setMessageActionHandlers(handlers) {
@@ -811,10 +903,6 @@ export function insertAtCursor(text) {
     autoResizeComposer();
     updateComposerMeta(input.value);
     focusComposer();
-}
-
-export function scrollMessagesToBottom() {
-    DOM.messagesDiv.scrollTop = DOM.messagesDiv.scrollHeight;
 }
 
 function openMenuDropdown(menuId, anchor, targetId) {

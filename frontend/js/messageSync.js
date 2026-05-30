@@ -58,7 +58,7 @@ export function applyStatusEvent(chatHistory, event, saveHistory) {
             }
         });
         if (changed && saveHistory) saveHistory();
-        return { rerenderPartner: partner };
+        return null;
     }
 
     const message = findOutgoingMessage(chatHistory, {
