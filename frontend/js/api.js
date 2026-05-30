@@ -53,6 +53,14 @@ export async function deleteConversation(token, partner) {
     return deleteJson(`/api/history/conversation/${encodeURIComponent(partner)}`, token);
 }
 
+export async function updateProfile(token, profile) {
+    return putJson('/api/profile', {
+        display_name: profile.displayName || '',
+        bio: profile.bio || '',
+        avatar_data: profile.avatarDataUrl || null,
+    }, token);
+}
+
 async function postJson(path, payload) {
     const res = await fetch(`${API_URL}${path}`, {
         method: 'POST',
@@ -75,6 +83,19 @@ async function deleteJson(path, token) {
     const res = await fetch(`${API_URL}${path}`, {
         method: 'DELETE',
         headers: authHeaders(token)
+    });
+
+    return parseJsonResponse(res);
+}
+
+async function putJson(path, payload, token) {
+    const res = await fetch(`${API_URL}${path}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders(token),
+        },
+        body: JSON.stringify(payload),
     });
 
     return parseJsonResponse(res);

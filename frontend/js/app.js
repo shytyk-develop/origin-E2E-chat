@@ -47,6 +47,7 @@ import {
     setRealtimeContext,
     setUiPreferences,
     updateProfileRailButton,
+    refreshContactList,
     showComposerReplyBar,
     hideComposerReplyBar,
     patchMessageReactionsDom,
@@ -128,8 +129,15 @@ import {
     getUser,
     getHistory,
     deleteMessage,
-    deleteConversation
+    deleteConversation,
+    updateProfile,
 } from './api.js';
+import {
+    cacheRemoteProfileFromApi,
+    clearProfileDirectory,
+    ingestUserRecords,
+} from './profileDirectory.js';
+import { initMiniProfile } from './miniProfile.js';
 
 let socketConnection = null;
 let routerReady = false;
@@ -414,6 +422,25 @@ function handleConversationDeletedEvent(data) {
     renderSidebar();
 }
 
+function refreshContactsDisplay() {
+    refreshContactList();
+    syncRealtimeUi();
+}
+
+function handleProfileUpdated(data) {
+    if (!data?.username) return;
+    cacheRemoteProfileFromApi(data.username, data);
+    refreshContactsDisplay();
+    if (state.currentTargetUser === data.username) {
+        activateChatPanel(data.username);
+    }
+}
+
+async function syncProfileToServer(profile) {
+    if (!state.token || !profile) return;
+    await updateProfile(state.token, profile);
+}
+
 function sendChatFocus(partner) {
     const socket = getSocket();
     if (!socket) return;
@@ -484,8 +511,15 @@ initProfileSettings({
         }
         showToast('Privacy setting applied.', 'success');
     },
-    onProfileSaved: () => {
+    onProfileSaved: async (profile) => {
         updateProfileRailButton(state.myUsername);
+        try {
+            await syncProfileToServer(profile);
+            refreshContactsDisplay();
+        } catch (err) {
+            console.error('Profile sync failed:', err);
+            showToast('Saved locally; server sync failed.', 'error');
+        }
     },
     onClearAllHistory: async () => {
         const partners = new Set([
@@ -514,6 +548,21 @@ initProfileSettings({
         }
     },
     showToast,
+});
+
+initMiniProfile({
+    getMyUsername: () => state.myUsername,
+    onOpenChat: onContactSelected,
+    showToast,
+    isOnline: (username) => isUserOnline(state, username),
+    isMuted: (username) => isChatMuted(state.myUsername, username),
+    onToggleMute: (partner) => {
+        if (!state.myUsername || !partner) return;
+        const muted = toggleChatMuted(state.myUsername, partner);
+        showToast(muted ? 'Chat muted locally.' : 'Chat unmuted.', 'success');
+        syncRealtimeUi();
+    },
+    showPresence: () => getPrivacyFlags(state.preferences).showOnlineStatus,
 });
 
 registerOverlayActions({
@@ -709,6 +758,7 @@ async function loadSidebarChats() {
     try {
         const chats = await getChats(state.token, 50);
         state.sidebarChats = chats;
+        ingestUserRecords(chats);
         chats.forEach(chat => {
             state.usersDirectory[chat.username] = chat.public_key;
             if (chat.unread_count != null) {
@@ -755,9 +805,14 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
             const data = JSON.parse(event.data);
 
             if (data.type === "users_list") {
+                ingestUserRecords(data.users);
                 data.users.forEach(u => {
                     state.usersDirectory[u.username] = u.public_key;
                 });
+                refreshContactList();
+            }
+            else if (data.type === "profile_updated") {
+                handleProfileUpdated(data);
             }
             else if (data.type === "presence_sync") {
                 if (getPrivacyFlags(state.preferences).showOnlineStatus) {
@@ -1272,6 +1327,7 @@ function handleContactSearchInput() {
 async function performUserSearch(query) {
     try {
         const users = await searchUsers(state.token, query, 20);
+        ingestUserRecords(users);
         users.forEach(user => {
             state.usersDirectory[user.username] = user.public_key;
         });
@@ -1468,6 +1524,7 @@ function handleLogout() {
     state.onlineUsers = new Set();
     state.unreadCounts = {};
     state.typingUsers = new Set();
+    clearProfileDirectory();
     cancelReadReceipt();
     sendChatFocus(null);
     realtime?.reset();

@@ -65,6 +65,11 @@ class ConnectionManager:
         self.active_connections[websocket]["username"] = username
         self.active_connections[websocket]["public_key"] = public_key
         self.active_connections[websocket]["share_presence"] = share_presence
+        profile = await asyncio.to_thread(database.get_user_profile_db, username)
+        if profile:
+            self.active_connections[websocket]["display_name"] = profile.get("display_name", "")
+            self.active_connections[websocket]["bio"] = profile.get("bio", "")
+            self.active_connections[websocket]["avatar_data"] = profile.get("avatar_data")
         self.username_to_websocket[username] = websocket
         self.online_usernames.add(username)
 
@@ -115,6 +120,9 @@ class ConnectionManager:
             {
                 "username": session["username"],
                 "public_key": session["public_key"],
+                "display_name": session.get("display_name", ""),
+                "bio": session.get("bio", ""),
+                "avatar_data": session.get("avatar_data"),
             }
             for session in self.active_connections.values()
             if session.get("username") and session.get("public_key")
@@ -124,6 +132,32 @@ class ConnectionManager:
         for ws in list(self.active_connections.keys()):
             try:
                 await ws.send_text(message_json)
+            except Exception:
+                await self.disconnect(ws)
+
+    async def set_user_profile(self, username: str, profile: dict):
+        ws = self.username_to_websocket.get(username)
+        if not ws:
+            return
+        session = self.active_connections.get(ws)
+        if not session:
+            return
+        session["display_name"] = profile.get("display_name", "")
+        session["bio"] = profile.get("bio", "")
+        session["avatar_data"] = profile.get("avatar_data")
+
+    async def broadcast_profile_update(self, username: str, profile: dict):
+        await self.set_user_profile(username, profile)
+        payload = {
+            "type": "profile_updated",
+            "username": username,
+            "display_name": profile.get("display_name", ""),
+            "bio": profile.get("bio", ""),
+            "avatar_data": profile.get("avatar_data"),
+        }
+        for ws in list(self.active_connections.keys()):
+            try:
+                await self._send_json(ws, payload)
             except Exception:
                 await self.disconnect(ws)
 

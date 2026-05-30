@@ -51,6 +51,21 @@ def init_db():
         ''')
 
         cursor.execute('''
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS display_name VARCHAR(32) NOT NULL DEFAULT '';
+        ''')
+
+        cursor.execute('''
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS bio VARCHAR(140) NOT NULL DEFAULT '';
+        ''')
+
+        cursor.execute('''
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS avatar_data TEXT;
+        ''')
+
+        cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_users_username_lower
             ON users (LOWER(username));
         ''')
@@ -246,23 +261,29 @@ def search_users_db(query: str, current_username: str, limit: int = 20) -> list:
         normalized_query = query.lower().strip()
         like_query = normalized_query.replace('\\', '\\\\').replace('_', '\\_')
         cursor.execute('''
-            SELECT username, public_key
+            SELECT username, public_key, display_name, bio, avatar_data
             FROM users
             WHERE username <> %s
               AND username ~ '^[a-z0-9_]+$'
-              AND username LIKE %s ESCAPE '\\'
+              AND (
+                  username LIKE %s ESCAPE '\\'
+                  OR LOWER(COALESCE(display_name, '')) LIKE %s ESCAPE '\\'
+              )
             ORDER BY
                 CASE
                     WHEN username = %s THEN 0
                     WHEN username LIKE %s ESCAPE '\\' THEN 1
-                    ELSE 2
+                    WHEN LOWER(COALESCE(display_name, '')) LIKE %s ESCAPE '\\' THEN 2
+                    ELSE 3
                 END,
                 username
             LIMIT %s
         ''', (
             current_username,
             f'%{like_query}%',
+            f'%{like_query}%',
             normalized_query,
+            f'{like_query}%',
             f'{like_query}%',
             safe_limit
         ))
@@ -411,6 +432,9 @@ def get_chat_partners_db(username: str, limit: int = 50) -> list:
             SELECT
                 p.partner,
                 u.public_key,
+                u.display_name,
+                u.bio,
+                u.avatar_data,
                 p.last_message_at,
                 p.last_message_id,
                 COALESCE((
@@ -431,9 +455,12 @@ def get_chat_partners_db(username: str, limit: int = 50) -> list:
         return [{
             "username": row[0],
             "public_key": _parse_public_key(row[1]),
-            "last_message_at": row[2].isoformat() if row[2] else None,
-            "last_message_id": row[3],
-            "unread_count": row[4] or 0,
+            "display_name": row[2] or "",
+            "bio": row[3] or "",
+            "avatar_data": row[4] if row[4] else None,
+            "last_message_at": row[5].isoformat() if row[5] else None,
+            "last_message_id": row[6],
+            "unread_count": row[7] or 0,
         } for row in rows]
     finally:
         release_connection(conn)
@@ -444,7 +471,7 @@ def get_user_db(username: str):
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            SELECT username, public_key
+            SELECT username, public_key, display_name, bio, avatar_data
             FROM users
             WHERE username = %s
               AND username ~ '^[a-z0-9_]+$'
@@ -453,6 +480,38 @@ def get_user_db(username: str):
         return _user_row_to_dict(row) if row else None
     finally:
         release_connection(conn)
+
+def update_user_profile_db(
+    username: str,
+    display_name: str,
+    bio: str,
+    avatar_data: Optional[str],
+) -> bool:
+    """Persist public profile metadata (display name, bio, avatar)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            UPDATE users
+            SET display_name = %s, bio = %s, avatar_data = %s
+            WHERE username = %s
+        ''', (display_name, bio, avatar_data, username))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        release_connection(conn)
+
+def get_user_profile_db(username: str) -> Optional[dict]:
+    """Return profile fields for one user."""
+    user = get_user_db(username)
+    if not user:
+        return None
+    return {
+        "username": user["username"],
+        "display_name": user.get("display_name", ""),
+        "bio": user.get("bio", ""),
+        "avatar_data": user.get("avatar_data"),
+    }
 
 # --- OPTIMIZED MESSAGE FUNCTIONS WITH BATCHING & PAGINATION ---
 
@@ -794,10 +853,15 @@ def _parse_public_key(public_key_str):
         return public_key_str
 
 def _user_row_to_dict(row):
-    return {
+    data = {
         "username": row[0],
-        "public_key": _parse_public_key(row[1])
+        "public_key": _parse_public_key(row[1]),
     }
+    if len(row) > 2:
+        data["display_name"] = row[2] or ""
+        data["bio"] = row[3] or ""
+        data["avatar_data"] = row[4] if row[4] else None
+    return data
 
 # Initialize tables on startup
 init_db()

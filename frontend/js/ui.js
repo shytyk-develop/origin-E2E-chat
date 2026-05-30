@@ -15,7 +15,13 @@ import {
 } from './messageLinks.js';
 import { hydrateProfilePrivacy, queueProfilePanelRefresh } from './profileSettings.js';
 import { getPrivacyFlags, isChatMuted } from './privacy.js';
-import { getDisplayLabel, loadProfile } from './profile.js';
+import {
+    applyContactAvatar,
+    getDisplayLabel,
+    loadProfile,
+} from './profile.js';
+import { resolveContactProfile } from './profileDirectory.js';
+import { attachMiniProfileHover } from './miniProfile.js';
 
 export const DOM = {
     pageLogin: document.getElementById('page-login'),
@@ -207,7 +213,9 @@ export function clearUsersList(message = 'No conversations yet') {
 
 export function activateChatPanel(username) {
     closeOverlaysForChatChange();
-    DOM.chatWithTitle.textContent = `Secure channel: ${username}`;
+    const profile = resolveContactProfile(username, null, contactsState.myUsername);
+    const label = getDisplayLabel(username, profile);
+    DOM.chatWithTitle.textContent = label === username ? `@${username}` : label;
     DOM.messageInput.disabled = false;
     DOM.sendBtn.disabled = false;
     setChatToolsEnabled(true);
@@ -988,6 +996,10 @@ export function setChatToolsEnabled(isEnabled) {
     });
 }
 
+export function refreshContactList() {
+    renderFilteredUsers();
+}
+
 function renderFilteredUsers() {
     DOM.usersListDiv.innerHTML = '';
 
@@ -998,7 +1010,10 @@ function renderFilteredUsers() {
     const visibleUsers = sourceUsers.filter(user => {
         if (user.username === contactsState.myUsername) return false;
         if (!contactsState.query) return true;
-        return user.username.toLowerCase().includes(contactsState.query);
+        const q = contactsState.query;
+        const profile = resolveContactProfile(user.username, user, contactsState.myUsername);
+        const label = getDisplayLabel(user.username, profile).toLowerCase();
+        return user.username.toLowerCase().includes(q) || label.includes(q);
     });
 
     if (!visibleUsers.length) {
@@ -1016,29 +1031,44 @@ function renderFilteredUsers() {
     }
 
     visibleUsers.forEach(user => {
+        const profile = resolveContactProfile(user.username, user, contactsState.myUsername);
+        const label = getDisplayLabel(user.username, profile);
+        const hasDisplayName = Boolean(profile.displayName?.trim());
+
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'contact-row';
         btn.dataset.username = user.username;
-        btn.setAttribute('aria-label', `Open chat with ${user.username}`);
+        btn.setAttribute('aria-label', `Open chat with ${label}`);
 
         const avatar = document.createElement('div');
         avatar.className = 'contact-avatar';
-        avatar.textContent = getInitials(user.username);
+        applyContactAvatar(avatar, user.username, profile);
 
         const meta = document.createElement('div');
         meta.className = 'contact-meta';
 
+        const nameRow = document.createElement('div');
+        nameRow.className = 'contact-name-row';
+
         const name = document.createElement('div');
-        name.className = 'contact-name';
-        name.textContent = user.username;
+        name.className = `contact-name${hasDisplayName ? ' has-display-name' : ''}`;
+        name.textContent = label;
+
+        nameRow.append(name);
+        if (hasDisplayName) {
+            const handle = document.createElement('span');
+            handle.className = 'contact-handle';
+            handle.textContent = `@${user.username}`;
+            nameRow.appendChild(handle);
+        }
 
         const subtitle = document.createElement('div');
         subtitle.className = 'contact-subtitle';
         subtitle.dataset.contactSubtitle = 'true';
         applyContactSubtitle(subtitle, user.username, user);
 
-        meta.append(name, subtitle);
+        meta.append(nameRow, subtitle);
 
         const presence = document.createElement('div');
         presence.className = `contact-presence ${getPresenceClasses(user.username)}`;
@@ -1056,6 +1086,7 @@ function renderFilteredUsers() {
             btn.append(badge);
         }
         btn.onclick = () => contactsState.onUserSelect?.(user.username);
+        attachMiniProfileHover(btn, user.username, user);
         DOM.usersListDiv.appendChild(btn);
     });
 
@@ -1082,15 +1113,6 @@ function setActiveContact(username) {
         button.classList.toggle('is-active', isActive);
         button.setAttribute('aria-current', isActive ? 'true' : 'false');
     });
-}
-
-function getInitials(username) {
-    return username
-        .split(/[\s._-]+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map(part => part[0].toUpperCase())
-        .join('') || '?';
 }
 
 function formatMessageTime(date) {

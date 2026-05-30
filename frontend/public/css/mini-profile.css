@@ -1,0 +1,206 @@
+.mini-profile-card {
+    --avatar-hue: 220;
+    background: var(--surface-elevated, var(--card));
+    border: 1px solid var(--b2, rgba(255, 255, 255, 0.12));
+    border-radius: var(--r3, 16px);
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    max-width: min(300px, calc(100vw - 24px));
+    opacity: 0;
+    pointer-events: none;
+    position: fixed;
+    transform: translateY(4px);
+    transition:
+        opacity 0.16s ease,
+        transform 0.16s ease;
+    width: 280px;
+    z-index: 1200;
+}
+
+.mini-profile-card.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.mini-profile-inner {
+    padding: 14px;
+}
+
+.mini-profile-hero {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.mini-profile-avatar {
+    align-items: center;
+    background: linear-gradient(
+        145deg,
+        hsl(var(--avatar-hue) 55% 42%) 0%,
+        hsl(calc(var(--avatar-hue) + 24) 50% 32%) 100%
+    );
+    border: 1px solid var(--b1);
+    border-radius: var(--r2, 12px);
+    color: #fff;
+    display: flex;
+    flex-shrink: 0;
+    font-family: var(--f-mono);
+    font-size: 18px;
+    font-weight: 700;
+    height: 56px;
+    justify-content: center;
+    overflow: hidden;
+    width: 56px;
+}
+
+.mini-profile-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.mini-profile-identity {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.mini-profile-name {
+    color: var(--t1);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mini-profile-handle {
+    color: var(--t3);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mini-profile-status {
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-top: 4px;
+    padding: 2px 8px;
+    width: fit-content;
+}
+
+.mini-profile-status.is-online {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+}
+
+.mini-profile-status.is-offline {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+}
+
+.mini-profile-bio {
+    color: var(--t2);
+    display: -webkit-box;
+    font-size: 12px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-height: 1.45;
+    margin: 0 0 12px;
+    overflow: hidden;
+}
+
+.mini-profile-bio.is-placeholder {
+    color: var(--t3);
+    font-style: italic;
+}
+
+.mini-profile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.mini-profile-btn {
+    background: var(--hover);
+    border: 1px solid var(--b1);
+    border-radius: var(--r1, 8px);
+    color: var(--t2);
+    cursor: pointer;
+    flex: 1;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 0;
+    padding: 7px 10px;
+    transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+
+.mini-profile-btn:hover {
+    background: var(--active);
+    border-color: var(--b2);
+    color: var(--t1);
+}
+
+.mini-profile-btn--primary {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: rgba(99, 102, 241, 0.35);
+    color: #a5b4fc;
+}
+
+.mini-profile-btn--primary:hover {
+    background: rgba(99, 102, 241, 0.28);
+    color: #c7d2fe;
+}
+
+.contact-avatar {
+    --avatar-hue: 220;
+    background: linear-gradient(
+        145deg,
+        hsl(var(--avatar-hue) 55% 38%) 0%,
+        hsl(calc(var(--avatar-hue) + 24) 50% 28%) 100%
+    );
+    color: rgba(255, 255, 255, 0.92);
+    overflow: hidden;
+}
+
+.contact-avatar.has-photo {
+    background: var(--card);
+    border-color: var(--b2);
+}
+
+.contact-avatar-img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.contact-name-row {
+    align-items: baseline;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+}
+
+.contact-name-row .contact-handle {
+    color: var(--t3);
+    flex-shrink: 0;
+    font-family: var(--f-mono);
+    font-size: 10px;
+    opacity: 0.85;
+}
+
+.contact-name.has-display-name {
+    font-weight: 600;
+}

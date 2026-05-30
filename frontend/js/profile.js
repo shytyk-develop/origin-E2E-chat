@@ -1,4 +1,4 @@
-// Local profile identity — client-only, E2EE-safe metadata (no server sync).
+// Local profile identity — synced to server as public metadata (display name, bio, avatar).
 
 export const PROFILE_LIMITS = {
     displayName: 32,
@@ -71,6 +71,28 @@ export function getInitials(label) {
         .slice(0, 2)
         .map((part) => part[0]?.toUpperCase() || '')
         .join('') || '?';
+}
+
+/** Render a small avatar circle inside a contact row or list item. */
+export function applyContactAvatar(containerEl, username, profile) {
+    if (!containerEl) return;
+    const label = getDisplayLabel(username, profile);
+    const hue = getAvatarHue(username);
+    containerEl.style.setProperty('--avatar-hue', String(hue));
+    containerEl.classList.toggle('has-photo', Boolean(profile?.avatarDataUrl));
+    containerEl.replaceChildren();
+
+    if (profile?.avatarDataUrl) {
+        const img = document.createElement('img');
+        img.src = profile.avatarDataUrl;
+        img.alt = '';
+        img.className = 'contact-avatar-img';
+        img.loading = 'lazy';
+        containerEl.appendChild(img);
+        return;
+    }
+
+    containerEl.textContent = getInitials(label);
 }
 
 export function getAvatarHue(username) {

@@ -398,7 +398,7 @@ async function processAvatarFile(file) {
         avatarPreviewUrl = await readAvatarAsDataUrl(file);
         draftProfile.avatarDataUrl = avatarPreviewUrl;
         updatePreview(resolveUsername());
-        ctx?.showToast?.('Avatar updated — saved locally.', 'success');
+        ctx?.showToast?.('Avatar updated.', 'success');
         saveIdentity(true);
     } catch {
         ctx?.showToast?.('Could not load image.', 'error');
