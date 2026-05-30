@@ -5,90 +5,171 @@
 [data-theme="dark"] {
     color-scheme: dark;
 
-    --bg: #1a1b26;
-    --surface: rgba(36, 37, 48, 0.72);
-    --surface-elevated: rgba(48, 49, 62, 0.88);
-    --text: #f2f2f7;
-    --text-secondary: #9898a8;
+    --bg: #121318;
+    --bg-subtle: #171820;
+    --surface: #1a1b24;
+    --surface-elevated: #22232e;
+    --surface-overlay: #2a2b36;
+    --text: #ececf1;
+    --text-secondary: #9898a6;
+    --text-tertiary: #6e6e7a;
     --accent: #0a84ff;
-    --accent-muted: rgba(10, 132, 255, 0.22);
-    --bubble-own: rgba(10, 132, 255, 0.92);
+    --accent-muted: rgba(10, 132, 255, 0.32);
+    --bubble-own: #0a84ff;
     --bubble-own-text: #ffffff;
-    --bubble-other: rgba(58, 58, 72, 0.55);
-    --bubble-other-text: #f2f2f7;
-    --border: rgba(255, 255, 255, 0.08);
+    --bubble-other: #252631;
+    --bubble-other-border: rgba(255, 255, 255, 0.07);
+    --bubble-other-text: #ececf1;
+    --border: rgba(255, 255, 255, 0.09);
     --border-strong: rgba(255, 255, 255, 0.14);
-    --glass: rgba(28, 28, 38, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.24), 0 8px 24px rgba(0, 0, 0, 0.18);
-    --shadow-bubble: 0 1px 1px rgba(0, 0, 0, 0.12);
-    --green: #30d158;
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --glass: rgba(22, 23, 30, 0.94);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 1px 2px rgba(0, 0, 0, 0.28), 0 12px 32px rgba(0, 0, 0, 0.22);
+    --shadow-bubble: 0 1px 1px rgba(0, 0, 0, 0.18);
+    --shadow-bubble-own: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-bubble-other: 0 1px 2px rgba(0, 0, 0, 0.14);
+    --green: #32d74b;
     --red: #ff453a;
-    --accent-10: rgba(10, 132, 255, 0.12);
-    --accent-20: rgba(10, 132, 255, 0.22);
-    --green-10: rgba(48, 209, 88, 0.12);
-    --green-20: rgba(48, 209, 88, 0.22);
-    --red-10: rgba(255, 69, 58, 0.1);
-    --red-20: rgba(255, 69, 58, 0.2);
+    --accent-10: rgba(10, 132, 255, 0.14);
+    --accent-20: rgba(10, 132, 255, 0.24);
+    --green-10: rgba(50, 215, 75, 0.12);
+    --green-20: rgba(50, 215, 75, 0.22);
+    --red-10: rgba(255, 69, 58, 0.12);
+    --red-20: rgba(255, 69, 58, 0.22);
+
+    /* Polish tokens */
+    --shell-bg: #16171f;
+    --shell-border: rgba(255, 255, 255, 0.07);
+    --row-hover: rgba(255, 255, 255, 0.05);
+    --row-active: rgba(10, 132, 255, 0.12);
+    --row-active-border: rgba(10, 132, 255, 0.28);
+    --row-active-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.08);
+    --input-fill: rgba(255, 255, 255, 0.04);
+    --input-fill-hover: rgba(255, 255, 255, 0.06);
+    --input-fill-focus: rgba(255, 255, 255, 0.07);
+    --input-border: rgba(255, 255, 255, 0.1);
+    --input-border-hover: rgba(255, 255, 255, 0.14);
+    --input-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+    --input-shadow-focus: 0 0 0 3px var(--accent-10), 0 1px 2px rgba(0, 0, 0, 0.12);
+    --btn-secondary-bg: rgba(255, 255, 255, 0.04);
+    --btn-secondary-bg-hover: rgba(255, 255, 255, 0.07);
+    --btn-secondary-border: rgba(255, 255, 255, 0.1);
+    --overlay-bg: #242530;
+    --overlay-border: rgba(255, 255, 255, 0.1);
+    --overlay-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 48px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.25);
+    --backdrop: rgba(8, 8, 12, 0.55);
+    --backdrop-modal: rgba(8, 8, 12, 0.68);
+    --settings-row-bg: rgba(255, 255, 255, 0.03);
+    --chat-dot-grid: rgba(255, 255, 255, 0.025);
+    --login-grid: rgba(10, 132, 255, 0.06);
+    --login-glow: rgba(10, 132, 255, 0.08);
+    --login-vignette: rgba(8, 8, 12, 0.72);
+    --login-card-bg: #1c1d28;
+    --login-card-border: rgba(255, 255, 255, 0.1);
+    --login-card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 24px 64px rgba(0, 0, 0, 0.55), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --login-mark-bg: rgba(10, 132, 255, 0.1);
+    --login-mark-border: rgba(10, 132, 255, 0.22);
+    --login-mark-shadow: 0 4px 20px rgba(10, 132, 255, 0.12);
 
     /* Legacy aliases (shell / sidebar) */
     --void: var(--bg);
     --panel: var(--surface-elevated);
-    --card: rgba(44, 45, 58, 0.65);
-    --hover: rgba(255, 255, 255, 0.06);
-    --active: rgba(255, 255, 255, 0.09);
-    --b0: var(--border);
+    --card: #1f2029;
+    --hover: var(--row-hover);
+    --active: rgba(255, 255, 255, 0.08);
+    --b0: var(--border-subtle);
     --b1: var(--border);
     --b2: var(--border-strong);
     --b3: rgba(255, 255, 255, 0.22);
     --t1: var(--text);
     --t2: var(--text-secondary);
-    --t3: rgba(152, 152, 168, 0.85);
-    --t4: rgba(120, 120, 140, 0.65);
+    --t3: var(--text-tertiary);
+    --t4: rgba(110, 110, 122, 0.75);
 }
 
 /* ─── Light ─── */
 [data-theme="light"] {
     color-scheme: light;
 
-    --bg: #f5f5f7;
-    --surface: rgba(255, 255, 255, 0.72);
-    --surface-elevated: rgba(255, 255, 255, 0.92);
-    --text: #1d1d1f;
-    --text-secondary: #6e6e73;
+    --bg: #e8eaef;
+    --bg-subtle: #eef0f4;
+    --surface: #ffffff;
+    --surface-elevated: #ffffff;
+    --surface-overlay: #ffffff;
+    --text: #1c1c1e;
+    --text-secondary: #636366;
+    --text-tertiary: #8e8e93;
     --accent: #007aff;
-    --accent-muted: rgba(0, 122, 255, 0.14);
-    --bubble-own: rgba(0, 122, 255, 0.94);
+    --accent-muted: rgba(0, 122, 255, 0.28);
+    --bubble-own: #007aff;
     --bubble-own-text: #ffffff;
-    --bubble-other: rgba(233, 233, 235, 0.95);
-    --bubble-other-text: #1d1d1f;
-    --border: rgba(0, 0, 0, 0.06);
-    --border-strong: rgba(0, 0, 0, 0.1);
-    --glass: rgba(255, 255, 255, 0.72);
-    --glass-border: rgba(0, 0, 0, 0.06);
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.06);
-    --shadow-bubble: 0 1px 1px rgba(0, 0, 0, 0.05);
+    --bubble-other: #ffffff;
+    --bubble-other-border: rgba(0, 0, 0, 0.08);
+    --bubble-other-text: #1c1c1e;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.12);
+    --border-subtle: rgba(0, 0, 0, 0.05);
+    --glass: rgba(255, 255, 255, 0.92);
+    --glass-border: rgba(0, 0, 0, 0.07);
+    --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
+    --shadow-bubble: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-bubble-own: 0 1px 3px rgba(0, 122, 255, 0.22);
+    --shadow-bubble-other: 0 1px 2px rgba(0, 0, 0, 0.05);
     --green: #34c759;
     --red: #ff3b30;
     --accent-10: rgba(0, 122, 255, 0.1);
     --accent-20: rgba(0, 122, 255, 0.18);
-    --green-10: rgba(52, 199, 89, 0.12);
-    --green-20: rgba(52, 199, 89, 0.2);
+    --green-10: rgba(52, 199, 89, 0.1);
+    --green-20: rgba(52, 199, 89, 0.18);
     --red-10: rgba(255, 59, 48, 0.08);
-    --red-20: rgba(255, 59, 48, 0.16);
+    --red-20: rgba(255, 59, 48, 0.14);
+
+    --shell-bg: rgba(255, 255, 255, 0.94);
+    --shell-border: rgba(0, 0, 0, 0.07);
+    --row-hover: rgba(0, 0, 0, 0.035);
+    --row-active: rgba(0, 122, 255, 0.09);
+    --row-active-border: rgba(0, 122, 255, 0.22);
+    --row-active-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.06);
+    --input-fill: rgba(255, 255, 255, 0.95);
+    --input-fill-hover: #ffffff;
+    --input-fill-focus: #ffffff;
+    --input-border: rgba(0, 0, 0, 0.1);
+    --input-border-hover: rgba(0, 0, 0, 0.14);
+    --input-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --input-shadow-focus: 0 0 0 3px var(--accent-10), 0 1px 3px rgba(0, 0, 0, 0.06);
+    --btn-secondary-bg: rgba(255, 255, 255, 0.85);
+    --btn-secondary-bg-hover: #ffffff;
+    --btn-secondary-border: rgba(0, 0, 0, 0.09);
+    --overlay-bg: #ffffff;
+    --overlay-border: rgba(0, 0, 0, 0.08);
+    --overlay-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 16px 48px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
+    --backdrop: rgba(232, 234, 239, 0.72);
+    --backdrop-modal: rgba(232, 234, 239, 0.85);
+    --settings-row-bg: rgba(255, 255, 255, 0.9);
+    --chat-dot-grid: rgba(0, 0, 0, 0.04);
+    --login-grid: rgba(0, 122, 255, 0.07);
+    --login-glow: rgba(0, 122, 255, 0.06);
+    --login-vignette: rgba(232, 234, 239, 0.35);
+    --login-card-bg: #ffffff;
+    --login-card-border: rgba(0, 0, 0, 0.08);
+    --login-card-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+    --login-mark-bg: rgba(0, 122, 255, 0.08);
+    --login-mark-border: rgba(0, 122, 255, 0.18);
+    --login-mark-shadow: 0 4px 16px rgba(0, 122, 255, 0.1);
 
     --void: var(--bg);
     --panel: var(--surface-elevated);
-    --card: rgba(255, 255, 255, 0.85);
-    --hover: rgba(0, 0, 0, 0.04);
-    --active: rgba(0, 0, 0, 0.06);
-    --b0: var(--border);
+    --card: #ffffff;
+    --hover: var(--row-hover);
+    --active: rgba(0, 0, 0, 0.05);
+    --b0: var(--border-subtle);
     --b1: var(--border);
     --b2: var(--border-strong);
     --b3: rgba(0, 0, 0, 0.18);
     --t1: var(--text);
     --t2: var(--text-secondary);
-    --t3: #86868b;
+    --t3: var(--text-tertiary);
     --t4: #aeaeb2;
 }
 
@@ -169,9 +250,9 @@ body {
 }
 
 #messageInput:focus {
-    background: var(--surface-elevated);
-    border-color: var(--accent-muted);
-    box-shadow: 0 0 0 3px var(--accent-10), var(--shadow-soft);
+    background: var(--input-fill-focus);
+    border-color: var(--accent);
+    box-shadow: var(--input-shadow-focus);
     outline: none;
 }
 
@@ -284,10 +365,8 @@ body {
 }
 
 .message-bubble--other {
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
     background: var(--bubble-other);
-    border: 1px solid var(--border);
+    border: 1px solid var(--bubble-other-border);
     border-bottom-left-radius: var(--radius-bubble-tail);
     color: var(--bubble-other-text);
     justify-content: flex-start;
@@ -369,13 +448,18 @@ body {
     color: var(--red);
 }
 
-/* Glass surfaces (sidebar, modals) */
+[data-theme="light"] {
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.07);
+    --shadow-3: 0 12px 36px rgba(0, 0, 0, 0.1);
+}
+
+/* Glass surfaces (sidebar, modals) — lighter blur, solid fill */
 .sidebar,
 .nav-rail {
-    background: var(--glass);
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
-    border-color: var(--border);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border-color: var(--shell-border, var(--border));
 }
 
 .modal-panel,

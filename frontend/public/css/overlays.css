@@ -12,9 +12,9 @@
 }
 
 .overlay-backdrop {
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    background: color-mix(in srgb, var(--bg) 40%, transparent);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    background: var(--backdrop, color-mix(in srgb, var(--bg) 40%, transparent));
     inset: 0;
     opacity: 0;
     pointer-events: auto;
@@ -27,15 +27,15 @@
 }
 
 .overlay-backdrop.is-modal {
-    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    background: var(--backdrop-modal, color-mix(in srgb, var(--bg) 55%, transparent));
 }
 
 .overlay-surface {
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
-    background: var(--surface-elevated);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-overlay);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    background: var(--overlay-bg, var(--surface-elevated));
+    border: 1px solid var(--overlay-border, var(--border));
+    box-shadow: var(--overlay-shadow, var(--shadow-overlay));
     opacity: 0;
     pointer-events: auto;
     position: fixed;

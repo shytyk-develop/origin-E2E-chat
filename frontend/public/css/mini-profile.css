@@ -1,11 +1,9 @@
 .mini-profile-card {
     --avatar-hue: 220;
-    background: var(--surface-elevated, var(--card));
-    border: 1px solid var(--b2, rgba(255, 255, 255, 0.12));
+    background: var(--overlay-bg, var(--surface-elevated));
+    border: 1px solid var(--overlay-border, var(--border));
     border-radius: var(--r3, 16px);
-    box-shadow:
-        0 16px 48px rgba(0, 0, 0, 0.35),
-        0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    box-shadow: var(--overlay-shadow, var(--shadow-soft));
     max-width: min(300px, calc(100vw - 24px));
     opacity: 0;
     pointer-events: none;

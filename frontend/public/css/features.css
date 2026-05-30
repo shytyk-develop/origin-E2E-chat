@@ -144,10 +144,8 @@
 }
 
 .popover-menu {
-    background: var(--panel);
-    border: 1px solid var(--b2);
     border-radius: var(--r2);
-    box-shadow: 0 20px 54px rgba(0, 0, 0, 0.55);
+    box-shadow: var(--overlay-shadow, 0 20px 54px rgba(0, 0, 0, 0.55));
     display: grid;
     gap: 4px;
     min-width: 178px;
@@ -319,7 +317,7 @@
 .toggle-row,
 .shortcut-list > div {
     align-items: center;
-    background: rgba(255, 255, 255, 0.025);
+    background: var(--settings-row-bg, rgba(255, 255, 255, 0.025));
     border: 1px solid var(--b1);
     border-radius: var(--r2);
     color: var(--t2);
