@@ -20,7 +20,8 @@
     box-shadow: var(--login-card-shadow);
 }
 
-.login-mark {
+.login-mark,
+.brand-logo--login {
     background: var(--login-mark-bg);
     border-color: var(--login-mark-border);
     box-shadow: var(--login-mark-shadow);

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OriginHub - E2EE Core</title>
+    <link rel="icon" type="image/svg+xml" href="/brand/originhub-icon.svg">
+    <link rel="apple-touch-icon" href="/brand/originhub-icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -18,6 +20,7 @@
     <link rel="stylesheet" href="/css/profile-settings.css">
     <link rel="stylesheet" href="/css/mini-profile.css">
     <link rel="stylesheet" href="/css/theme-polish.css">
+    <link rel="stylesheet" href="/css/brand.css">
     <link rel="stylesheet" href="/css/app-layout.css">
     <script>
         (function () {
@@ -166,36 +169,6 @@
         .login-logo {
             margin-bottom: 38px;
             text-align: center;
-        }
-
-        .login-mark {
-            align-items: center;
-            background: var(--active);
-            border: 1px solid var(--b2);
-            border-radius: var(--r3);
-            box-shadow: inset 0 1px 0 var(--b1), 0 0 28px var(--accent-10);
-            color: var(--accent);
-            display: inline-flex;
-            font-family: var(--f-mono);
-            font-size: 14px;
-            font-weight: 700;
-            height: 54px;
-            justify-content: center;
-            margin-bottom: 18px;
-            position: relative;
-            width: 54px;
-        }
-
-        .login-mark::before {
-            background: linear-gradient(135deg, var(--accent-20) 0%, transparent 70%);
-            border-radius: var(--r3) 0 var(--r3) 0;
-            content: "";
-            height: 40%;
-            left: -1px;
-            pointer-events: none;
-            position: absolute;
-            top: -1px;
-            width: 40%;
         }
 
         .login-title {
@@ -359,23 +332,6 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-        }
-
-        .rail-logo {
-            align-items: center;
-            background: var(--active);
-            border: 1px solid var(--b2);
-            border-radius: var(--r2);
-            box-shadow: 0 0 20px var(--accent-10);
-            color: var(--accent);
-            display: flex;
-            font-family: var(--f-mono);
-            font-size: 11px;
-            font-weight: 700;
-            height: 34px;
-            justify-content: center;
-            margin-bottom: 6px;
-            width: 34px;
         }
 
         .rail-sep {
@@ -641,35 +597,6 @@
             z-index: 30;
         }
 
-        .welcome-lock {
-            align-items: center;
-            background: var(--card);
-            border: 1px solid var(--b2);
-            border-radius: var(--r3);
-            box-shadow: 0 0 40px var(--accent-10);
-            color: var(--accent);
-            display: flex;
-            font-family: var(--f-mono);
-            font-size: 16px;
-            font-weight: 700;
-            height: 58px;
-            justify-content: center;
-            margin-bottom: 22px;
-            position: relative;
-            width: 58px;
-        }
-
-        .welcome-lock::before {
-            background: linear-gradient(135deg, var(--accent-20), transparent 65%);
-            border-radius: var(--r3) 0 var(--r3) 0;
-            content: "";
-            height: 45%;
-            left: -1px;
-            position: absolute;
-            top: -1px;
-            width: 45%;
-        }
-
         .welcome-h {
             color: var(--t3);
             font-family: var(--f-mono);
@@ -887,7 +814,9 @@
     <div id="page-login" class="route-page">
         <div class="login-card">
             <div class="login-logo">
-                <div class="login-mark">OH</div>
+                <div class="brand-logo brand-logo--login" role="img" aria-label="OriginHub">
+                    <svg class="brand-logo__svg" aria-hidden="true"><use href="#brand-originhub"/></svg>
+                </div>
                 <h1 class="login-title">OriginHub</h1>
                 <p class="login-sub">Zero-Knowledge Encrypted</p>
             </div>
@@ -907,6 +836,11 @@
     </div>
 
     <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+        <symbol id="brand-originhub" viewBox="0 0 48 48" fill="none">
+            <circle cx="13" cy="28" r="4" fill="currentColor"/>
+            <circle cx="35" cy="28" r="4" fill="currentColor"/>
+            <path d="M17 27.5C20 16.5 28 16.5 31 27.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
         <symbol id="icon-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
         <symbol id="icon-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
         <symbol id="icon-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></symbol>
@@ -927,7 +861,9 @@
     <div id="page-chat" class="route-page hidden">
         <div class="nav-rail" aria-label="Primary navigation">
             <div class="rail-top">
-                <div class="rail-logo">OH</div>
+                <div class="brand-logo brand-logo--rail" role="img" aria-label="OriginHub">
+                    <svg class="brand-logo__svg" aria-hidden="true"><use href="#brand-originhub"/></svg>
+                </div>
                 <div class="rail-sep"></div>
                 <button id="uiFocusContactsBtn" class="rail-icon-btn" type="button" title="Focus contacts" aria-label="Focus contacts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-users"/></svg></button>
                 <button id="uiFocusComposerBtn" class="rail-icon-btn" type="button" title="Focus composer" aria-label="Focus composer"><svg class="ui-icon" aria-hidden="true"><use href="#icon-message"/></svg></button>
@@ -985,7 +921,9 @@
                 <div id="messages" aria-live="polite"></div>
 
                 <div id="chat-welcome">
-                    <div class="welcome-lock">ZK</div>
+                    <div class="brand-logo brand-logo--welcome" role="img" aria-label="OriginHub">
+                        <svg class="brand-logo__svg" aria-hidden="true"><use href="#brand-originhub"/></svg>
+                    </div>
                     <p class="welcome-h">No Channel Established</p>
                     <p class="welcome-p">Select an active encryption node from the sidebar to synchronize keys and mount a secure pipeline.</p>
                 </div>
@@ -1080,9 +1018,14 @@
             </nav>
             <div class="profile-main">
                 <header class="profile-head">
-                    <div>
-                        <h2 id="uiProfileTitle">Profile Settings</h2>
-                        <p class="profile-head-sub">Local identity · E2EE-safe</p>
+                    <div class="profile-head-title">
+                        <div class="brand-logo brand-logo--sm brand-logo--filled profile-head-mark" aria-hidden="true">
+                            <svg class="brand-logo__svg"><use href="#brand-originhub"/></svg>
+                        </div>
+                        <div>
+                            <h2 id="uiProfileTitle">Profile Settings</h2>
+                            <p class="profile-head-sub">Local identity · E2EE-safe</p>
+                        </div>
                     </div>
                     <button id="uiCloseProfileBtn" class="mini-icon-btn" type="button" title="Close profile" aria-label="Close profile"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
                 </header>

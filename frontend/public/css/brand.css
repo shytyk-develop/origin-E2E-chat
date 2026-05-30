@@ -1,0 +1,135 @@
+/* OriginHub brand mark — SVG logo placements */
+
+.brand-logo {
+    align-items: center;
+    display: inline-flex;
+    flex-shrink: 0;
+    justify-content: center;
+    line-height: 0;
+    position: relative;
+}
+
+.brand-logo__svg {
+    display: block;
+    height: 100%;
+    width: 100%;
+    color: var(--accent);
+}
+
+/* Login hero */
+.brand-logo--login {
+    background: var(--login-mark-bg);
+    border: 1px solid var(--login-mark-border);
+    border-radius: var(--r3, 16px);
+    box-shadow: var(--login-mark-shadow);
+    height: 54px;
+    margin-bottom: 18px;
+    width: 54px;
+}
+
+.brand-logo--login .brand-logo__svg {
+    height: 30px;
+    width: 30px;
+}
+
+/* Nav rail */
+.brand-logo--rail {
+    background: var(--login-mark-bg);
+    border: 1px solid var(--login-mark-border);
+    border-radius: var(--r2, 12px);
+    box-shadow: 0 0 16px var(--accent-10);
+    height: 34px;
+    margin-bottom: 6px;
+    width: 34px;
+}
+
+.brand-logo--rail .brand-logo__svg {
+    height: 20px;
+    width: 20px;
+}
+
+/* Profile / settings compact */
+.brand-logo--sm {
+    height: 24px;
+    width: 24px;
+}
+
+.brand-logo--sm .brand-logo__svg {
+    height: 24px;
+    width: 24px;
+}
+
+.brand-logo--md {
+    height: 32px;
+    width: 32px;
+}
+
+.brand-logo--md .brand-logo__svg {
+    height: 32px;
+    width: 32px;
+}
+
+.brand-logo--lg {
+    height: 48px;
+    width: 48px;
+}
+
+.brand-logo--lg .brand-logo__svg {
+    height: 48px;
+    width: 48px;
+}
+
+/* Filled tile variant (optional) */
+.brand-logo--filled {
+    background: linear-gradient(145deg, #1b4f9c 0%, #0a84ff 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--r2, 12px);
+    box-shadow: 0 4px 14px rgba(10, 132, 255, 0.22);
+}
+
+.brand-logo--filled .brand-logo__svg {
+    color: #ffffff;
+}
+
+.brand-logo--welcome {
+    background: var(--login-mark-bg);
+    border: 1px solid var(--login-mark-border);
+    border-radius: var(--r3, 16px);
+    box-shadow: var(--login-mark-shadow);
+    height: 58px;
+    margin-bottom: 22px;
+    width: 58px;
+}
+
+.brand-logo--welcome .brand-logo__svg {
+    height: 32px;
+    width: 32px;
+}
+
+.profile-head-title {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    min-width: 0;
+}
+
+.profile-head-mark {
+    flex-shrink: 0;
+}
+
+.profile-head-mark .brand-logo__svg {
+    height: 14px;
+    width: 14px;
+}
+
+.profile-head-title h2 {
+    margin: 0;
+}
+
+.profile-head-title .profile-head-sub {
+    margin: 4px 0 0;
+}
+
+[data-theme="light"] .brand-logo--filled {
+    box-shadow: 0 4px 14px rgba(0, 122, 255, 0.18);
+}
