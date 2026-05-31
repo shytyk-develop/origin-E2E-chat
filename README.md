@@ -332,7 +332,7 @@ origin-e2e-chat/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-org>/origin-e2e-chat.git
+git clone https://github.com/<shytyk-develop>/origin-e2e-chat.git
 cd origin-e2e-chat
 ```
 
