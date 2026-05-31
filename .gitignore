@@ -6,5 +6,3 @@ __pycache__/
 # Node.js / Vite
 frontend/node_modules/
 frontend/dist/
-
-docs/screenshots/
