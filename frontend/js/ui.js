@@ -135,6 +135,9 @@ const messageActionHandlers = {
     onReply: null,
     onReact: null,
     getMyUsername: () => '',
+    /** Resolve canonical message record from a row (state is source of truth). */
+    resolveMessage: null,
+    onActionUnavailable: null,
 };
 
 export function setRealtimeContext(ctx = {}) {
@@ -252,6 +255,7 @@ export function renderMessagesList(messages) {
         const prev = index > 0 ? messages[index - 1] : null;
         DOM.messagesDiv.appendChild(buildMessageElement(message, prev));
     });
+    reconcileMessageRowsWithHistory(messages);
     scrollMessagesToBottom({ force: true });
 }
 
@@ -366,6 +370,27 @@ export function syncAllMessageRowActions() {
     DOM.messagesDiv.querySelectorAll('.message-row').forEach(syncMessageRowActions);
 }
 
+/** Align row data-* ids and action affordances with in-memory message records. */
+export function reconcileMessageRowsWithHistory(messages) {
+    if (!Array.isArray(messages)) return;
+
+    messages.forEach((message) => {
+        const row = findMessageElement({
+            messageId: message.id,
+            clientMessageId: message.clientMessageId,
+        });
+        if (!row) return;
+
+        if (message.id != null) {
+            row.dataset.messageId = String(message.id);
+        }
+        if (message.clientMessageId) {
+            row.dataset.clientMessageId = message.clientMessageId;
+        }
+        syncMessageRowActions(row);
+    });
+}
+
 export function appendMessage(messageOrSender, text, type, timestamp = Date.now(), previousMessage = null) {
     const message = typeof messageOrSender === 'object'
         ? messageOrSender
@@ -384,7 +409,9 @@ export function appendMessage(messageOrSender, text, type, timestamp = Date.now(
         }
     }
 
-    DOM.messagesDiv.appendChild(buildMessageElement(message, previousMessage));
+    const row = buildMessageElement(message, previousMessage);
+    DOM.messagesDiv.appendChild(row);
+    reconcileMessageRowsWithHistory([message]);
     scrollMessagesToBottom();
 }
 
@@ -580,101 +607,146 @@ function getRowMessageId(row) {
     return id != null && id !== '' ? id : null;
 }
 
-/** Enable/disable hover actions from row dataset (after ack / sync). */
+/** Sync hover-action affordances from row dataset (after ack / sync). */
 export function syncMessageRowActions(row) {
     if (!row) return;
     const hasId = getRowMessageId(row) != null;
     row.classList.toggle('is-actions-pending', !hasId);
 
-    const replyBtn = row.querySelector('[data-action="reply"]');
-    const reactBtn = row.querySelector('[data-action="react"]');
-    const deleteBtn = row.querySelector('[data-action="delete"]');
+    row.querySelectorAll('[data-action="reply"], [data-action="react"], [data-action="delete"]').forEach((btn) => {
+        btn.removeAttribute('disabled');
+        if (hasId) {
+            btn.removeAttribute('aria-disabled');
+        } else {
+            btn.setAttribute('aria-disabled', 'true');
+        }
 
-    if (replyBtn) {
-        replyBtn.disabled = !hasId;
-        replyBtn.title = hasId ? 'Reply' : 'Waiting for sync';
-    }
-    if (reactBtn) {
-        reactBtn.disabled = !hasId;
-        reactBtn.title = hasId ? 'React' : 'Waiting for sync';
-    }
-    if (deleteBtn) {
-        deleteBtn.disabled = !hasId;
-        deleteBtn.title = hasId ? 'Delete message' : 'Waiting for sync';
-    }
-}
-
-let messageActionsDelegated = false;
-
-/** One listener on #messages — survives rerender and always reads fresh message id. */
-export function initMessageActions() {
-    if (messageActionsDelegated || !DOM.messagesDiv) return;
-    messageActionsDelegated = true;
-
-    DOM.messagesDiv.addEventListener('mousedown', (event) => {
-        if (event.target.closest('[data-action], .message-reaction-chip, .message-bubble')) {
-            event.stopPropagation();
+        const action = btn.dataset.action;
+        if (action === 'reply') {
+            btn.title = hasId ? 'Reply' : 'Waiting for sync';
+        } else if (action === 'react') {
+            btn.title = hasId ? 'React' : 'Waiting for sync';
+        } else if (action === 'delete') {
+            btn.title = hasId ? 'Delete message' : 'Waiting for sync';
         }
     });
+}
 
-    DOM.messagesDiv.addEventListener('click', (event) => {
+function resolveRowActionContext(row) {
+    const message = messageActionHandlers.resolveMessage?.(row) || null;
+
+    if (message?.id != null) {
+        const idStr = String(message.id);
+        if (row.dataset.messageId !== idStr) {
+            row.dataset.messageId = idStr;
+            syncMessageRowActions(row);
+        }
+    }
+
+    return {
+        messageId: getRowMessageId(row),
+        message,
+    };
+}
+
+function notifyActionUnavailable(action) {
+    messageActionHandlers.onActionUnavailable?.(action);
+}
+
+function handleMessageActionsEvent(event) {
+    if (event.type === 'click') {
         const link = event.target.closest('.message-link');
         if (link) {
-            event.stopPropagation();
             const href = link.getAttribute('href');
             if (!href || !isSafeWebHref(href)) {
                 event.preventDefault();
             }
             return;
         }
+    }
 
-        const row = event.target.closest('.message-row');
-        if (!row) return;
+    const row = event.target.closest('.message-row');
+    if (!row) return;
 
-        const messageId = getRowMessageId(row);
-        if (!messageId) return;
-
-        if (event.target.closest('[data-action="reply"]')) {
-            event.preventDefault();
-            event.stopPropagation();
-            messageActionHandlers.onReply?.({ id: messageId });
-            return;
-        }
-
-        if (event.target.closest('[data-action="react"]')) {
-            event.preventDefault();
-            event.stopPropagation();
-            const btn = event.target.closest('[data-action="react"]');
-            messageActionHandlers.onReact?.(messageId, null, btn);
-            return;
-        }
-
-        if (event.target.closest('[data-action="delete"]')) {
-            event.preventDefault();
-            event.stopPropagation();
-            messageActionHandlers.onDeleteMessage?.(messageId);
-            return;
-        }
-
-        const chip = event.target.closest('.message-reaction-chip');
-        if (chip?.dataset.emoji) {
-            event.preventDefault();
-            event.stopPropagation();
-            messageActionHandlers.onReact?.(messageId, chip.dataset.emoji);
-        }
-    });
-
-    DOM.messagesDiv.addEventListener('dblclick', (event) => {
-        const row = event.target.closest('.message-row');
+    if (event.type === 'dblclick') {
         const bubble = event.target.closest('.message-bubble');
-        if (!row || !bubble) return;
+        if (!bubble) return;
 
-        const messageId = getRowMessageId(row);
-        if (!messageId) return;
+        const { messageId } = resolveRowActionContext(row);
+        if (!messageId) {
+            notifyActionUnavailable('react');
+            return;
+        }
 
+        event.preventDefault();
         event.stopPropagation();
         messageActionHandlers.onReact?.(messageId, null, bubble);
-    });
+        return;
+    }
+
+    if (event.target.closest('[data-action="reply"]')) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const { messageId } = resolveRowActionContext(row);
+        if (!messageId) {
+            notifyActionUnavailable('reply');
+            return;
+        }
+        messageActionHandlers.onReply?.({ id: messageId });
+        return;
+    }
+
+    if (event.target.closest('[data-action="react"]')) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const { messageId } = resolveRowActionContext(row);
+        if (!messageId) {
+            notifyActionUnavailable('react');
+            return;
+        }
+        const btn = event.target.closest('[data-action="react"]');
+        messageActionHandlers.onReact?.(messageId, null, btn);
+        return;
+    }
+
+    if (event.target.closest('[data-action="delete"]')) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const { messageId } = resolveRowActionContext(row);
+        if (!messageId) {
+            notifyActionUnavailable('delete');
+            return;
+        }
+        messageActionHandlers.onDeleteMessage?.(messageId);
+        return;
+    }
+
+    const chip = event.target.closest('.message-reaction-chip');
+    if (chip?.dataset.emoji) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const { messageId } = resolveRowActionContext(row);
+        if (!messageId) {
+            notifyActionUnavailable('react');
+            return;
+        }
+        messageActionHandlers.onReact?.(messageId, chip.dataset.emoji);
+    }
+}
+
+let messageActionsInitialized = false;
+
+/** One capture-phase listener on #messages — survives DOM updates, no per-row binding. */
+export function initMessageActions() {
+    if (messageActionsInitialized || !DOM.messagesDiv) return;
+    messageActionsInitialized = true;
+
+    DOM.messagesDiv.addEventListener('click', handleMessageActionsEvent, true);
+    DOM.messagesDiv.addEventListener('dblclick', handleMessageActionsEvent, true);
 }
 
 export function scrollToMessageById(messageId) {
@@ -755,7 +827,14 @@ function isGroupedWithPrevious(message, previousMessage) {
 }
 
 export function updateMessageIdentity(clientMessageId, id, timestamp, status = 'sent') {
-    const msgElement = DOM.messagesDiv.querySelector(`[data-client-message-id="${CSS.escape(clientMessageId)}"]`);
+    let msgElement = clientMessageId
+        ? DOM.messagesDiv.querySelector(`[data-client-message-id="${CSS.escape(clientMessageId)}"]`)
+        : null;
+    if (!msgElement && id != null) {
+        msgElement = DOM.messagesDiv.querySelector(
+            `[data-message-id="${CSS.escape(String(id))}"]`
+        );
+    }
     if (!msgElement) return;
 
     msgElement.dataset.messageId = String(id);
@@ -814,6 +893,8 @@ export function setMessageActionHandlers(handlers) {
     messageActionHandlers.onReply = handlers.onReply || null;
     messageActionHandlers.onReact = handlers.onReact || null;
     messageActionHandlers.getMyUsername = handlers.getMyUsername || (() => '');
+    messageActionHandlers.resolveMessage = handlers.resolveMessage || null;
+    messageActionHandlers.onActionUnavailable = handlers.onActionUnavailable || null;
 }
 
 export function setComposerValue(text) {

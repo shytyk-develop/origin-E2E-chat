@@ -56,6 +56,7 @@ import {
     patchMessageReactionsDom,
     openReactionPicker,
     scrollToMessageById,
+    reconcileMessageRowsWithHistory,
     MAX_MESSAGE_LENGTH,
     showComposerLimitError,
     clearComposerLimitError,
@@ -666,10 +667,36 @@ registerOverlayActions({
     },
 });
 
+function resolveMessageForRow(row) {
+    const partner = state.currentTargetUser;
+    if (!partner || !row) return null;
+
+    const messageId = row.dataset.messageId;
+    const clientMessageId = row.dataset.clientMessageId;
+    const history = state.chatHistory[partner] || [];
+
+    return history.find((item) =>
+        (messageId != null && messageId !== '' && item.id != null && String(item.id) === String(messageId)) ||
+        (clientMessageId && item.clientMessageId === clientMessageId)
+    ) || null;
+}
+
+setMessageActionHandlers({
+    onDeleteMessage: deleteSingleMessage,
+    onReply: (message) => startReplyToMessage({ messageId: message.id }),
+    onReact: (messageId, emoji, anchor) => handleToggleReaction(messageId, emoji, anchor),
+    getMyUsername: () => state.myUsername,
+    resolveMessage: resolveMessageForRow,
+    onActionUnavailable: () => {
+        showToast('Message is still syncing. Try again in a moment.', 'info');
+    },
+});
+
 initMessageContextMenu((row) => {
+    const message = resolveMessageForRow(row);
     const text = row.querySelector('.message-text')?.textContent || '';
     return {
-        messageId: row.dataset.messageId || null,
+        messageId: message?.id != null ? String(message.id) : (row.dataset.messageId || null),
         clientMessageId: row.dataset.clientMessageId || null,
         messageType: row.dataset.messageType,
         text,
@@ -930,6 +957,7 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
                             data.timestamp,
                             target.status || 'sent'
                         );
+                        reconcileMessageRowsWithHistory([target]);
                     }
                 }
 
@@ -984,6 +1012,8 @@ function handleReactionSyncEvent(data) {
     );
     if (row) {
         patchMessageReactionsDom(data.message_id, result.reactions, state.myUsername);
+    } else if (state.currentTargetUser) {
+        reconcileMessageRowsWithHistory(state.chatHistory[state.currentTargetUser] || []);
     }
 }
 
@@ -1049,6 +1079,9 @@ function processMessage(chatPartner, messageInput) {
             }
         }
         saveChatHistory();
+        if (state.currentTargetUser === chatPartner) {
+            reconcileMessageRowsWithHistory([existing]);
+        }
         return;
     }
 
@@ -1327,12 +1360,6 @@ if (DOM.glassPicker) {
         showToast('Glass intensity updated.', 'success');
     });
 }
-setMessageActionHandlers({
-    onDeleteMessage: deleteSingleMessage,
-    onReply: (message) => startReplyToMessage({ messageId: message.id }),
-    onReact: (messageId, emoji, anchor) => handleToggleReaction(messageId, emoji, anchor),
-    getMyUsername: () => state.myUsername,
-});
 
 if (DOM.replyCloseBtn) {
     DOM.replyCloseBtn.addEventListener('click', clearPendingReply);
