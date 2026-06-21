@@ -121,14 +121,11 @@ export function setUiPreferences(preferences) {
     refreshChatHeaderSubtitle();
 }
 
-const PRESENCE_ONLINE =
-    'h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_2px_rgba(52,211,153,0.35)]';
-const PRESENCE_OFFLINE =
-    'h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.35)]';
-const UNREAD_BADGE =
-    'flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500 px-1.5 text-[10px] font-bold leading-none text-white';
+const PRESENCE_ONLINE = 'is-online';
+const PRESENCE_OFFLINE = 'is-offline';
+const UNREAD_BADGE = 'contact-unread';
 
-const COMPOSER_DEFAULT_META = 'Cipher Stack: AES-GCM-256 + RSA-OAEP-2048';
+const COMPOSER_DEFAULT_META = 'End-to-end encrypted';
 export const MAX_MESSAGE_LENGTH = 2000;
 const messageActionHandlers = {
     onDeleteMessage: null,
@@ -214,6 +211,25 @@ export function clearUsersList(message = 'No conversations yet') {
     renderFilteredUsers();
 }
 
+export function showContactsLoading(count = 6) {
+    if (!DOM.usersListDiv) return;
+    DOM.usersListDiv.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < count; i += 1) {
+        const row = document.createElement('div');
+        row.className = 'contact-skeleton';
+        row.setAttribute('aria-hidden', 'true');
+        row.innerHTML =
+            '<span class="skeleton skeleton-avatar"></span>' +
+            '<span class="skeleton-lines">' +
+            '<span class="skeleton skeleton-line skeleton-line--name"></span>' +
+            '<span class="skeleton skeleton-line skeleton-line--sub"></span>' +
+            '</span>';
+        fragment.appendChild(row);
+    }
+    DOM.usersListDiv.appendChild(fragment);
+}
+
 export function activateChatPanel(username) {
     closeOverlaysForChatChange();
     const profile = resolveContactProfile(username, null, contactsState.myUsername);
@@ -230,9 +246,9 @@ export function activateChatPanel(username) {
 
 export function resetChatPanel() {
     closeOverlaysForChatChange();
-    DOM.chatWithTitle.textContent = 'Select a secure channel';
+    DOM.chatWithTitle.textContent = 'Select a conversation';
     if (DOM.chatSubtitle) {
-        DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
+        DOM.chatSubtitle.textContent = 'End-to-end encrypted';
         DOM.chatSubtitle.className = 'header-sub';
     }
     clearMessageView();
@@ -957,6 +973,7 @@ export function showComposerLimitError(message) {
         DOM.draftStatus.dataset.limitError = '1';
         DOM.draftStatus.textContent = message;
         DOM.draftStatus.classList.add('danger');
+        DOM.draftStatus.classList.remove('hidden');
     }
 }
 
@@ -968,7 +985,11 @@ export function clearComposerLimitError() {
 }
 
 export function setDraftStatus(text = COMPOSER_DEFAULT_META) {
+    if (!DOM.draftStatus) return;
     DOM.draftStatus.textContent = text;
+    const isDecorative =
+        text === COMPOSER_DEFAULT_META && !DOM.draftStatus.classList.contains('danger');
+    DOM.draftStatus.classList.toggle('hidden', isDecorative);
 }
 
 export function insertAtCursor(text) {
@@ -1142,15 +1163,21 @@ function syncPickerActive(container, attr, value) {
 /** Single entry point for profile: nav rail profile button. */
 export function updateProfileRailButton(username) {
     if (!DOM.profileBtn) return;
+    const nameEl = DOM.profileBtn.querySelector('.account-name');
+    const subEl = DOM.profileBtn.querySelector('.account-sub');
     if (!username) {
         DOM.profileBtn.title = 'Profile settings';
         DOM.profileBtn.setAttribute('aria-label', 'Profile settings');
+        if (nameEl) nameEl.textContent = 'My profile';
+        if (subEl) subEl.textContent = 'Identity · Security · Data';
         return;
     }
     const profile = loadProfile(username);
     const label = getDisplayLabel(username, profile);
     DOM.profileBtn.title = `${label} (@${username})`;
     DOM.profileBtn.setAttribute('aria-label', `Profile: ${label}`);
+    if (nameEl) nameEl.textContent = label;
+    if (subEl) subEl.textContent = `@${username}`;
 }
 
 export function setChatToolsEnabled(isEnabled) {
@@ -1189,7 +1216,7 @@ function renderFilteredUsers() {
         const empty = document.createElement('div');
         empty.className = 'empty-state';
         if (contactsState.searchMode) {
-            empty.textContent = contactsState.query ? 'No matching nodes' : 'Type at least 2 characters';
+            empty.textContent = contactsState.query ? 'No matching contacts' : 'Type at least 2 characters';
         } else if (contactsState.query) {
             empty.textContent = 'No matching conversations';
         } else {
@@ -1363,7 +1390,7 @@ function refreshChatHeaderSubtitle() {
 
     const partner = contactsState.activeUsername;
     if (!partner) {
-        DOM.chatSubtitle.textContent = 'Asymmetric Cryptographic Handshake Tunnel';
+        DOM.chatSubtitle.textContent = 'End-to-end encrypted';
         DOM.chatSubtitle.className = 'header-sub';
         return;
     }

@@ -8,7 +8,7 @@
     <link rel="apple-touch-icon" href="/brand/originhub-icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/css/design-system.css">
     <link rel="stylesheet" href="/css/features.css">
@@ -22,11 +22,12 @@
     <link rel="stylesheet" href="/css/theme-polish.css">
     <link rel="stylesheet" href="/css/brand.css">
     <link rel="stylesheet" href="/css/app-layout.css">
+    <link rel="stylesheet" href="/css/login-page.css">
     <script>
         (function () {
             try {
                 var p = JSON.parse(localStorage.getItem('originhub_ui_preferences') || '{}');
-                var t = p.theme || 'system';
+                var t = p.theme || 'light';
                 if (t === 'system') {
                     t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 }
@@ -45,8 +46,8 @@
 
         :root {
             /* Color tokens live in ventura-theme.css (data-theme light/dark) */
-            --f-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-            --f-mono: ui-monospace, "SF Mono", Menlo, monospace;
+            --f-ui: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+            --f-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
             --r1: 8px;
             --r2: 12px;
             --r3: 16px;
@@ -95,213 +96,6 @@
 
         ::-webkit-scrollbar-thumb:hover {
             background: var(--b2);
-        }
-
-        #page-login {
-            align-items: center;
-            background: var(--bg);
-            display: flex;
-            height: 100%;
-            justify-content: center;
-            overflow: hidden;
-            padding: 20px;
-            position: relative;
-            width: 100%;
-        }
-
-        #page-login::before {
-            animation: gridDrift 24s linear infinite;
-            background-image:
-                linear-gradient(var(--accent-10) 1px, transparent 1px),
-                linear-gradient(90deg, var(--accent-10) 1px, transparent 1px);
-            background-size: 44px 44px;
-            content: "";
-            inset: 0;
-            pointer-events: none;
-            position: absolute;
-        }
-
-        #page-login::after {
-            background:
-                radial-gradient(ellipse 80% 55% at 50% 105%, var(--login-glow) 0%, transparent 62%),
-                radial-gradient(ellipse 120% 90% at 50% 50%, transparent 50%, var(--login-vignette) 100%);
-            content: "";
-            inset: 0;
-            pointer-events: none;
-            position: absolute;
-        }
-
-        @keyframes gridDrift {
-            from {
-                background-position: 0 0;
-            }
-
-            to {
-                background-position: 44px 44px;
-            }
-        }
-
-        .login-card {
-            animation: cardIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
-            background: var(--login-card-bg);
-            border: 1px solid var(--login-card-border);
-            border-radius: var(--r4);
-            box-shadow: var(--login-card-shadow);
-            max-width: 368px;
-            padding: 44px 40px 36px;
-            position: relative;
-            width: 100%;
-            z-index: 10;
-        }
-
-        @keyframes cardIn {
-            from {
-                opacity: 0;
-                transform: translateY(28px) scale(0.96);
-            }
-
-            to {
-                opacity: 1;
-                transform: none;
-            }
-        }
-
-        .login-logo {
-            margin-bottom: 38px;
-            text-align: center;
-        }
-
-        .login-title {
-            color: var(--t1);
-            font-size: 28px;
-            font-weight: 800;
-            letter-spacing: 0;
-            line-height: 1;
-            margin: 0;
-        }
-
-        .login-sub {
-            color: var(--t3);
-            font-family: var(--f-mono);
-            font-size: 9px;
-            letter-spacing: 0.18em;
-            margin: 7px 0 0;
-            text-transform: uppercase;
-        }
-
-        .login-fields {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 22px;
-        }
-
-        .login-input {
-            background: var(--input-fill);
-            border: 1px solid var(--input-border);
-            border-radius: var(--r2);
-            box-shadow: var(--input-shadow);
-            color: var(--text);
-            font-family: var(--f-ui);
-            font-size: 13.5px;
-            outline: none;
-            padding: 13px 16px;
-            transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
-            width: 100%;
-        }
-
-        .login-input::placeholder {
-            color: var(--text-tertiary);
-        }
-
-        .login-input:focus {
-            background: var(--input-fill-focus);
-            border-color: var(--accent);
-            box-shadow: var(--input-shadow-focus);
-        }
-
-        .login-btns {
-            display: flex;
-            gap: 8px;
-        }
-
-        #btnLogin,
-        #btnRegister {
-            border-radius: var(--r2);
-            cursor: pointer;
-            flex: 1;
-            font-family: var(--f-mono);
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.13em;
-            min-width: 0;
-            padding: 12px;
-            text-transform: uppercase;
-            transition: background 0.14s, border-color 0.14s, box-shadow 0.14s, color 0.14s, transform 0.1s;
-        }
-
-        #btnLogin {
-            background: var(--accent);
-            border: 1px solid color-mix(in srgb, var(--accent) 80%, #000);
-            color: #fff;
-        }
-
-        #btnLogin:hover {
-            background: color-mix(in srgb, var(--accent) 88%, #fff);
-            box-shadow: 0 4px 18px var(--accent-20);
-            color: #fff;
-        }
-
-        #btnRegister {
-            background: var(--btn-secondary-bg);
-            border: 1px solid var(--btn-secondary-border);
-            color: var(--text-secondary);
-        }
-
-        #btnRegister:hover {
-            background: var(--btn-secondary-bg-hover);
-            border-color: var(--border-strong);
-            color: var(--text);
-        }
-
-        #btnLogin:active,
-        #btnRegister:active {
-            transform: scale(0.97);
-        }
-
-        #authError {
-            animation: fadeUp 0.2s ease;
-            border-radius: var(--r2);
-            font-family: var(--f-mono);
-            font-size: 10px;
-            letter-spacing: 0.04em;
-            margin-top: 16px;
-            padding: 10px 14px;
-            text-align: center;
-        }
-
-        #authError.text-red-400 {
-            background: var(--red-10);
-            border: 1px solid var(--red-20);
-            color: var(--red) !important;
-        }
-
-        #authError.text-green-400 {
-            background: var(--green-10);
-            border: 1px solid var(--green-20);
-            color: var(--green) !important;
-        }
-
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(-4px);
-            }
-
-            to {
-                opacity: 1;
-                transform: none;
-            }
         }
 
         #page-chat {
@@ -396,25 +190,24 @@
         }
 
         .sidebar-label {
-            color: var(--t3);
-            font-family: var(--f-mono);
-            font-size: 8.5px;
-            font-weight: 700;
-            letter-spacing: 0.22em;
+            color: var(--t2);
+            font-family: var(--f-ui);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
             overflow: hidden;
             text-overflow: ellipsis;
-            text-transform: uppercase;
+            text-transform: none;
             white-space: nowrap;
         }
 
         .online-dot {
-            animation: blink 2.6s ease-in-out infinite;
             background: var(--green);
             border-radius: 50%;
-            box-shadow: 0 0 10px var(--green), 0 0 20px var(--green-20);
+            box-shadow: 0 0 0 3px var(--green-10);
             flex-shrink: 0;
-            height: 6px;
-            width: 6px;
+            height: 7px;
+            width: 7px;
         }
 
         @keyframes blink {
@@ -561,12 +354,12 @@
             border-radius: 999px;
             color: var(--t3);
             flex-shrink: 0;
-            font-family: var(--f-mono);
-            font-size: 9px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            padding: 5px 12px;
-            text-transform: uppercase;
+            font-family: var(--f-ui);
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0;
+            padding: 5px 11px;
+            text-transform: none;
             transition: background 0.3s, border-color 0.3s, color 0.3s;
         }
 
@@ -584,8 +377,9 @@
 
         #chat-welcome {
             align-items: center;
-            background: color-mix(in srgb, var(--bg) 90%, transparent);
-            backdrop-filter: blur(48px) saturate(160%);
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
             display: flex;
             flex-direction: column;
             inset: 0;
@@ -598,27 +392,26 @@
         }
 
         .welcome-h {
-            color: var(--t3);
-            font-family: var(--f-mono);
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.22em;
-            margin: 0 0 10px;
-            text-transform: uppercase;
+            color: var(--t1);
+            font-family: var(--f-ui);
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin: 0 0 8px;
+            text-transform: none;
         }
 
         .welcome-p {
             color: var(--t3);
-            font-size: 12.5px;
-            line-height: 1.65;
+            font-size: 13.5px;
+            line-height: 1.6;
             margin: 0;
-            max-width: 280px;
+            max-width: 300px;
         }
 
         .input-bar {
-            background: var(--glass);
-            backdrop-filter: blur(24px) saturate(180%);
-            border-top: 1px solid var(--b0);
+            background: transparent;
+            border-top: none;
             position: relative;
             z-index: 20;
         }
@@ -695,20 +488,19 @@
         }
 
         .cipher-led {
-            animation: blink 2.6s ease-in-out infinite;
             background: var(--green);
             border-radius: 50%;
-            box-shadow: 0 0 8px var(--green);
+            box-shadow: 0 0 0 3px var(--green-10);
             flex-shrink: 0;
-            height: 5px;
-            width: 5px;
+            height: 6px;
+            width: 6px;
         }
 
         .cipher-label {
             color: var(--t3);
-            font-family: var(--f-mono);
-            font-size: 8.5px;
-            letter-spacing: 0.06em;
+            font-family: var(--f-ui);
+            font-size: 11px;
+            letter-spacing: 0;
             min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -716,12 +508,13 @@
         }
 
         .zk-label {
-            color: var(--t4);
+            color: var(--t3);
             flex-shrink: 0;
             font-family: var(--f-mono);
-            font-size: 8px;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
+            font-size: 10px;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.02em;
+            text-transform: none;
         }
 
         @media (max-width: 760px) {
@@ -811,27 +604,118 @@
     </style>
 </head>
 <body>
-    <div id="page-login" class="route-page">
-        <div class="login-card">
-            <div class="login-logo">
-                <div class="brand-logo brand-logo--login" role="img" aria-label="OriginHub">
-                    <svg class="brand-logo__svg" aria-hidden="true"><use href="#brand-originhub"/></svg>
+    <div id="page-login" class="route-page login-page">
+        <div class="login-bg" aria-hidden="true">
+            <div id="loginCanvasIntro" class="login-canvas-host"></div>
+            <div id="loginCanvasReverse" class="login-canvas-host"></div>
+            <div class="login-bg-vignette"></div>
+            <div class="login-bg-fade"></div>
+        </div>
+
+        <div class="login-shell">
+            <header class="login-nav">
+                <div class="login-nav__row">
+                    <div class="login-nav__brand">
+                        <img src="/brand/nexa-logo.svg" alt="NEXA" class="login-nav__mark" width="1021" height="141" decoding="async">
+                    </div>
+
+                    <nav class="login-nav__links" aria-label="Product">
+                        <span class="login-nav__link">
+                            <span class="login-nav__link-stack">
+                                <span class="login-nav__link-text">Private</span>
+                                <span class="login-nav__link-text login-nav__link-text--hover">Private</span>
+                            </span>
+                        </span>
+                        <span class="login-nav__link">
+                            <span class="login-nav__link-stack">
+                                <span class="login-nav__link-text">Encrypted</span>
+                                <span class="login-nav__link-text login-nav__link-text--hover">Encrypted</span>
+                            </span>
+                        </span>
+                        <span class="login-nav__link">
+                            <span class="login-nav__link-stack">
+                                <span class="login-nav__link-text">Local-first</span>
+                                <span class="login-nav__link-text login-nav__link-text--hover">Local-first</span>
+                            </span>
+                        </span>
+                    </nav>
+
+                    <div class="login-nav__actions">
+                        <a href="https://www.linkedin.com/in/shytyk-develop" class="login-nav__btn" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                        <div class="login-nav__signup-wrap">
+                            <span class="login-nav__signup-glow" aria-hidden="true"></span>
+                            <a href="https://github.com/shytyk-develop" class="login-nav__btn login-nav__btn--signup" target="_blank" rel="noopener noreferrer">GitHub</a>
+                        </div>
+                    </div>
+
+                    <button id="loginNavToggle" type="button" class="login-nav__toggle" aria-expanded="false" aria-controls="loginNavMenu" aria-label="Open menu">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
+                    </button>
                 </div>
-                <h1 class="login-title">OriginHub</h1>
-                <p class="login-sub">Zero-Knowledge Encrypted</p>
-            </div>
 
-            <div class="login-fields">
-                <input type="text" id="usernameInput" class="login-input" placeholder="Username" autocomplete="username" spellcheck="false" inputmode="latin" maxlength="32" pattern="[a-z0-9_]{3,32}">
-                <input type="password" id="passwordInput" class="login-input" placeholder="Password" autocomplete="current-password">
-            </div>
+                <div id="loginNavMenu" class="login-nav__menu" hidden>
+                    <div class="login-nav__menu-links">
+                        <span class="login-nav__link">
+                            <span class="login-nav__link-stack">
+                                <span class="login-nav__link-text">Private</span>
+                                <span class="login-nav__link-text login-nav__link-text--hover">Private</span>
+                            </span>
+                        </span>
+                        <span class="login-nav__link">
+                            <span class="login-nav__link-stack">
+                                <span class="login-nav__link-text">Encrypted</span>
+                                <span class="login-nav__link-text login-nav__link-text--hover">Encrypted</span>
+                            </span>
+                        </span>
+                        <span class="login-nav__link">
+                            <span class="login-nav__link-stack">
+                                <span class="login-nav__link-text">Local-first</span>
+                                <span class="login-nav__link-text login-nav__link-text--hover">Local-first</span>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="login-nav__menu-actions">
+                        <a href="https://www.linkedin.com/in/shytyk-develop" class="login-nav__btn" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                        <div class="login-nav__signup-wrap login-nav__signup-wrap--menu">
+                            <span class="login-nav__signup-glow" aria-hidden="true"></span>
+                            <a href="https://github.com/shytyk-develop" class="login-nav__btn login-nav__btn--signup" target="_blank" rel="noopener noreferrer">GitHub</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
 
-            <div class="login-btns">
-                <button id="btnLogin" type="button">Log In</button>
-                <button id="btnRegister" type="button">Register</button>
-            </div>
+            <main class="login-main">
+                <div class="login-panel">
+                    <h1 class="login-panel__title">Welcome back</h1>
+                    <p class="login-panel__sub">Private · End-to-end encrypted</p>
 
-            <div id="authError" class="hidden" role="alert"></div>
+                    <form id="loginForm" class="login-form" novalidate>
+                        <div class="login-field">
+                            <input type="text" id="usernameInput" class="login-input" placeholder="Username" autocomplete="username" spellcheck="false" inputmode="latin" maxlength="32" pattern="[a-z0-9_]{3,32}">
+                        </div>
+
+                        <div class="login-field login-field--password">
+                            <input type="password" id="passwordInput" class="login-input" placeholder="Password" autocomplete="current-password">
+                            <button type="submit" class="login-field__submit" aria-label="Log in">
+                                <span class="login-field__submit-icon" aria-hidden="true">→</span>
+                            </button>
+                        </div>
+
+                        <div class="login-divider" aria-hidden="true">or</div>
+
+                        <div class="login-actions">
+                            <button type="button" id="btnRegister" class="login-actions__btn login-actions__btn--ghost">Register</button>
+                            <button type="button" id="btnLogin" class="login-actions__btn login-actions__btn--primary">Log In</button>
+                        </div>
+                    </form>
+
+                    <p class="login-legal">
+                        Your keys stay on this device. Messages are end-to-end encrypted and never readable by the server.
+                    </p>
+
+                    <div id="authError" class="hidden" role="alert"></div>
+                </div>
+            </main>
         </div>
     </div>
 
@@ -856,51 +740,68 @@
         <symbol id="icon-palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.75-.15 2.55-.4"/><path d="M22 12c0-1.1-.9-2-2-2h-2a2 2 0 0 1-2-2V6"/></symbol>
         <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
         <symbol id="icon-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></symbol>
+        <symbol id="icon-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></symbol>
+        <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+        <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="icon-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></symbol>
+        <symbol id="icon-paperclip" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+        <symbol id="icon-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/></symbol>
+        <symbol id="icon-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/></symbol>
     </svg>
 
     <div id="page-chat" class="route-page hidden">
-        <div class="nav-rail" aria-label="Primary navigation">
-            <div class="rail-top">
-                <div class="brand-logo brand-logo--rail" role="img" aria-label="OriginHub">
+        <aside class="sidebar" aria-label="Navigation and contacts">
+            <header class="sidebar-brand">
+                <div class="brand-logo brand-logo--side" role="img" aria-label="OriginHub">
                     <svg class="brand-logo__svg" aria-hidden="true"><use href="#brand-originhub"/></svg>
                 </div>
-                <div class="rail-sep"></div>
-                <button id="uiFocusContactsBtn" class="rail-icon-btn" type="button" title="Focus contacts" aria-label="Focus contacts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-users"/></svg></button>
-                <button id="uiFocusComposerBtn" class="rail-icon-btn" type="button" title="Focus composer" aria-label="Focus composer"><svg class="ui-icon" aria-hidden="true"><use href="#icon-message"/></svg></button>
-                <button id="uiShortcutsBtn" class="rail-icon-btn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-keyboard"/></svg></button>
-            </div>
-            <div class="rail-bottom">
-                <button id="uiProfileBtn" class="rail-icon-btn" type="button" title="Profile settings" aria-label="Profile settings"><svg class="ui-icon" aria-hidden="true"><use href="#icon-user"/></svg></button>
-                <button id="uiSettingsBtn" class="rail-icon-btn" type="button" title="Interface &amp; shortcuts" aria-label="Interface and shortcuts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"/></svg></button>
-                <div class="e2e-chip">E2E</div>
-            </div>
-        </div>
+                <span class="sidebar-brand-name">OriginHub</span>
+                <span class="e2e-chip" title="End-to-end encrypted">E2E</span>
+                <button id="uiSettingsBtn" class="mini-icon-btn" type="button" title="Interface settings" aria-label="Interface settings"><svg class="ui-icon" aria-hidden="true"><use href="#icon-settings"/></svg></button>
+            </header>
 
-        <aside class="sidebar" aria-label="Contacts">
             <div class="sidebar-head">
-                <span class="sidebar-label">Identity Nodes</span>
+                <span class="sidebar-label">Contacts</span>
                 <div class="sidebar-actions">
                     <button id="uiRefreshUsersBtn" class="mini-icon-btn" type="button" title="Refresh contacts" aria-label="Refresh contacts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"/></svg></button>
                     <div class="online-dot" aria-hidden="true"></div>
                 </div>
             </div>
             <div class="contact-search-wrap">
-                <input id="uiContactSearch" class="contact-search-input" type="search" placeholder="Search nodes" autocomplete="off" spellcheck="false">
+                <svg class="contact-search-icon ui-icon" aria-hidden="true"><use href="#icon-search"/></svg>
+                <input id="uiContactSearch" class="contact-search-input" type="search" placeholder="Search contacts" autocomplete="off" spellcheck="false">
                 <button id="uiClearContactSearchBtn" class="mini-icon-btn" type="button" title="Clear search" aria-label="Clear search"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
             </div>
             <div id="usersList"></div>
-            <div class="sidebar-foot">
-                <button id="uiCopyUsernameBtn" class="text-tool-btn" type="button">Copy ID</button>
-                <button id="uiLogoutBtn" class="text-tool-btn danger" type="button">Logout</button>
+
+            <div class="sidebar-hidden-controls hidden" aria-hidden="true">
+                <button id="uiFocusContactsBtn" type="button" tabindex="-1" title="Focus contacts" aria-label="Focus contacts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-users"/></svg></button>
+                <button id="uiFocusComposerBtn" type="button" tabindex="-1" title="Focus composer" aria-label="Focus composer"><svg class="ui-icon" aria-hidden="true"><use href="#icon-message"/></svg></button>
             </div>
+
+            <footer class="sidebar-foot">
+                <button id="uiProfileBtn" class="sidebar-user-chip" type="button" title="Profile &amp; identity" aria-label="Profile and identity">
+                    <span class="sidebar-user-chip__av" aria-hidden="true"><svg class="ui-icon"><use href="#icon-user"/></svg></span>
+                    <span class="sidebar-user-chip__meta">
+                        <span class="account-name">My profile</span>
+                        <span class="account-sub">@username</span>
+                    </span>
+                </button>
+                <div class="sidebar-foot-actions" role="toolbar" aria-label="Account actions">
+                    <button id="uiCopyUsernameBtn" class="foot-icon-btn" type="button" title="Copy ID" aria-label="Copy ID"><svg class="ui-icon" aria-hidden="true"><use href="#icon-copy"/></svg></button>
+                    <button id="uiShortcutsBtn" class="foot-icon-btn" type="button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><svg class="ui-icon" aria-hidden="true"><use href="#icon-keyboard"/></svg></button>
+                    <button id="uiLogoutBtn" class="foot-icon-btn foot-icon-btn--danger" type="button" title="Log out" aria-label="Log out"><svg class="ui-icon" aria-hidden="true"><use href="#icon-logout"/></svg></button>
+                </div>
+            </footer>
         </aside>
 
         <main class="chat-main">
             <header class="chat-header">
                 <div class="chat-header-inner">
                     <div class="header-left">
-                        <span id="chatWithTitle">Select a secure channel</span>
-                        <span id="chatSubtitle" class="header-sub">Asymmetric Cryptographic Handshake Tunnel</span>
+                        <span id="chatWithTitle">Select a conversation</span>
+                        <span id="chatSubtitle" class="header-sub">End-to-end encrypted</span>
                     </div>
                     <div class="chat-header-tools">
                         <span id="status" class="status-offline">Disconnected</span>
@@ -910,6 +811,26 @@
                     </div>
                 </div>
             </header>
+
+            <div class="input-bar">
+                <div id="uiReplyBar" class="composer-reply-bar hidden" aria-live="polite">
+                    <div class="composer-reply-accent" aria-hidden="true"></div>
+                    <div class="composer-reply-body">
+                        <p id="uiReplyLabel" class="composer-reply-label">Reply</p>
+                        <p id="uiReplyPreview" class="composer-reply-preview"></p>
+                    </div>
+                    <button id="uiReplyCloseBtn" type="button" class="composer-reply-close" title="Cancel reply" aria-label="Cancel reply"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
+                </div>
+                <span id="uiDraftStatus" class="composer-status hidden" aria-live="polite"></span>
+                <div class="input-row">
+                    <button id="uiAttachBtn" class="btn-attach" type="button" title="Add file marker" aria-label="Add file marker"><svg class="ui-icon" aria-hidden="true"><use href="#icon-upload"/></svg></button>
+                    <input id="uiFileInput" class="hidden" type="file" multiple>
+                    <textarea id="messageInput" placeholder="Type your message…" rows="1" maxlength="2000" disabled></textarea>
+                    <button id="uiComposerMenuBtn" class="btn-attach" type="button" title="Message tools" aria-haspopup="menu" aria-label="Message tools"><svg class="ui-icon" aria-hidden="true"><use href="#icon-more"/></svg></button>
+                    <button id="sendBtn" type="button" title="Send message" aria-label="Send message" disabled><svg class="ui-icon" aria-hidden="true"><use href="#icon-send"/></svg></button>
+                </div>
+                <span id="uiCharCounter" class="composer-char-counter">0 / 2000</span>
+            </div>
 
             <div class="chat-stage">
                 <div id="uiMessageSearchPanel" class="message-search-panel hidden">
@@ -924,33 +845,8 @@
                     <div class="brand-logo brand-logo--welcome" role="img" aria-label="OriginHub">
                         <svg class="brand-logo__svg" aria-hidden="true"><use href="#brand-originhub"/></svg>
                     </div>
-                    <p class="welcome-h">No Channel Established</p>
-                    <p class="welcome-p">Select an active encryption node from the sidebar to synchronize keys and mount a secure pipeline.</p>
-                </div>
-            </div>
-
-            <div class="input-bar">
-                <div id="uiReplyBar" class="composer-reply-bar hidden" aria-live="polite">
-                    <div class="composer-reply-accent" aria-hidden="true"></div>
-                    <div class="composer-reply-body">
-                        <p id="uiReplyLabel" class="composer-reply-label">Reply</p>
-                        <p id="uiReplyPreview" class="composer-reply-preview"></p>
-                    </div>
-                    <button id="uiReplyCloseBtn" type="button" class="composer-reply-close" title="Cancel reply" aria-label="Cancel reply"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
-                </div>
-                <div class="input-row">
-                    <button id="uiAttachBtn" class="btn-attach" type="button" title="Add file marker" aria-label="Add file marker"><svg class="ui-icon" aria-hidden="true"><use href="#icon-plus"/></svg></button>
-                    <input id="uiFileInput" class="hidden" type="file" multiple>
-                    <textarea id="messageInput" placeholder="Write an encrypted message..." rows="1" maxlength="2000" disabled></textarea>
-                    <button id="uiComposerMenuBtn" class="btn-attach" type="button" title="Message tools" aria-haspopup="menu" aria-label="Message tools"><svg class="ui-icon" aria-hidden="true"><use href="#icon-more"/></svg></button>
-                    <button id="sendBtn" type="button" disabled>Send</button>
-                </div>
-                <div class="input-meta">
-                    <div class="cipher-info">
-                        <div class="cipher-led" aria-hidden="true"></div>
-                        <span id="uiDraftStatus" class="cipher-label">Cipher Stack: AES-GCM-256 + RSA-OAEP-2048</span>
-                    </div>
-                    <span id="uiCharCounter" class="zk-label">0 / 2000</span>
+                    <p class="welcome-h">No conversation selected</p>
+                    <p class="welcome-p">Choose a contact from the list to start a private, end-to-end encrypted conversation.</p>
                 </div>
             </div>
         </main>
@@ -980,8 +876,8 @@
             <div class="toggle-row" style="flex-direction: column; align-items: stretch; cursor: default;">
                 <p class="settings-label">Theme</p>
                 <div id="uiThemePicker" class="theme-picker" role="group" aria-label="Theme">
-                    <button type="button" data-theme-value="light">Light</button>
-                    <button type="button" data-theme-value="dark">Dark</button>
+                    <button type="button" data-theme-value="light">Sage</button>
+                    <button type="button" data-theme-value="dark">Dusk</button>
                     <button type="button" data-theme-value="system">Auto</button>
                 </div>
             </div>
@@ -1018,94 +914,100 @@
             </nav>
             <div class="profile-main">
                 <header class="profile-head">
-                    <div class="profile-head-title">
-                        <div class="brand-logo brand-logo--sm brand-logo--filled profile-head-mark" aria-hidden="true">
-                            <svg class="brand-logo__svg"><use href="#brand-originhub"/></svg>
-                        </div>
-                        <div>
-                            <h2 id="uiProfileTitle">Profile Settings</h2>
-                            <p class="profile-head-sub">Local identity · E2EE-safe</p>
-                        </div>
+                    <div class="profile-head-copy">
+                        <h2 id="uiProfileTitle">Identity</h2>
+                        <p id="uiProfileHeadSub" class="profile-head-sub">Your display name, avatar, and local profile</p>
                     </div>
-                    <button id="uiCloseProfileBtn" class="mini-icon-btn" type="button" title="Close profile" aria-label="Close profile"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
+                    <button id="uiCloseProfileBtn" class="mini-icon-btn profile-close-btn" type="button" title="Close profile" aria-label="Close profile"><svg class="ui-icon" aria-hidden="true"><use href="#icon-x"/></svg></button>
                 </header>
                 <div class="profile-body">
                     <div data-profile-section="identity">
-                        <h3 class="profile-section-title">Profile identity</h3>
-                        <p class="profile-section-lead">Display name and status stay on this device until shared via future sync.</p>
-                        <div class="profile-identity-grid">
-                            <div>
-                                <div id="uiProfileAvatarZone" class="profile-avatar-zone" role="button" tabindex="0" aria-label="Change avatar">
+                        <div class="profile-preview-strip">
+                            <div id="uiProfileAvatarPreview" class="profile-preview-avatar">
+                                <img id="uiProfilePreviewImg" class="hidden" alt="">
+                                <span id="uiProfilePreviewInitials">?</span>
+                            </div>
+                            <div class="profile-preview-text">
+                                <p id="uiProfilePreviewName" class="profile-preview-name">—</p>
+                                <p id="uiProfilePreviewBio" class="profile-preview-bio is-placeholder">No status set</p>
+                            </div>
+                        </div>
+
+                        <section class="profile-card">
+                            <div class="profile-identity-toolbar">
+                                <div id="uiProfileAvatarZone" class="profile-avatar-zone profile-avatar-zone--sm" role="button" tabindex="0" aria-label="Change avatar">
                                     <img id="uiProfileAvatarImg" class="hidden" alt="">
                                     <span id="uiProfileAvatarInitials" class="profile-avatar-initials">?</span>
-                                    <span class="profile-avatar-overlay">Drop image</span>
+                                    <span class="profile-avatar-overlay"><svg class="ui-icon" aria-hidden="true"><use href="#icon-upload"/></svg></span>
                                 </div>
                                 <input id="uiProfileAvatarInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp">
-                                <div class="profile-avatar-actions">
-                                    <button id="uiProfileAvatarUploadBtn" class="profile-btn" type="button">Upload</button>
+                                <div class="profile-btn-group" role="group" aria-label="Avatar actions">
+                                    <button id="uiProfileAvatarUploadBtn" class="profile-btn profile-btn--soft" type="button">Upload</button>
                                     <button id="uiProfileAvatarRemoveBtn" class="profile-btn profile-btn--ghost" type="button">Remove</button>
                                 </div>
                             </div>
-                            <div>
+
+                            <div class="profile-card-divider" aria-hidden="true"></div>
+
+                            <div class="profile-fields">
                                 <div class="profile-field">
-                                    <label for="uiProfileDisplayName">Display name</label>
-                                    <input id="uiProfileDisplayName" type="text" maxlength="32" placeholder="Your name" autocomplete="nickname" spellcheck="false">
-                                    <span id="uiProfileNameCount" class="profile-field-meta">0 / 32</span>
+                                    <div class="profile-field__head">
+                                        <label for="uiProfileDisplayName">Display name</label>
+                                        <span id="uiProfileNameCount" class="profile-field-meta">0 / 32</span>
+                                    </div>
+                                    <input id="uiProfileDisplayName" type="text" maxlength="32" placeholder="How you appear in chats" autocomplete="nickname" spellcheck="false">
                                 </div>
                                 <div class="profile-field">
-                                    <label for="uiProfileBio">Bio / status</label>
-                                    <textarea id="uiProfileBio" rows="3" maxlength="140" placeholder="Available · AFK · Building secure software"></textarea>
-                                    <span id="uiProfileBioCount" class="profile-field-meta">0 / 140</span>
+                                    <div class="profile-field__head">
+                                        <label for="uiProfileBio">Bio</label>
+                                        <span id="uiProfileBioCount" class="profile-field-meta">0 / 140</span>
+                                    </div>
+                                    <textarea id="uiProfileBio" rows="2" maxlength="140" placeholder="Available · AFK · Building something great"></textarea>
                                 </div>
                             </div>
-                        </div>
-                        <div class="profile-preview-card">
-                            <div class="profile-preview-row">
-                                <div id="uiProfileAvatarPreview" class="profile-preview-avatar">
-                                    <img id="uiProfilePreviewImg" class="hidden" alt="">
-                                    <span id="uiProfilePreviewInitials">?</span>
-                                </div>
-                                <div>
-                                    <p id="uiProfilePreviewName" class="profile-preview-name">—</p>
-                                    <p id="uiProfilePreviewBio" class="profile-preview-bio is-placeholder">No status set</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="profile-card" style="margin-top: 16px;">
+
+                            <div class="profile-card-divider" aria-hidden="true"></div>
+
                             <div class="profile-id-row">
-                                <span class="profile-id-label">Username</span>
-                                <span id="uiProfileUsername" class="profile-id-value">Loading…</span>
-                                <button id="uiProfileCopyUsername" class="profile-copy-btn" type="button">Copy</button>
+                                <div class="profile-id-copy">
+                                    <span class="profile-id-label">Username</span>
+                                    <span id="uiProfileUsername" class="profile-id-value">Loading…</span>
+                                </div>
+                                <div class="profile-btn-group profile-btn-group--sm">
+                                    <button id="uiProfileCopyUsername" class="profile-btn profile-btn--ghost profile-copy-btn" type="button" title="Copy username" aria-label="Copy username">Copy</button>
+                                </div>
                             </div>
                             <div class="profile-id-row">
-                                <span class="profile-id-label">User ID</span>
-                                <span id="uiProfileUserId" class="profile-id-value">Loading…</span>
-                                <button id="uiProfileCopyUserId" class="profile-copy-btn" type="button">Copy</button>
+                                <div class="profile-id-copy">
+                                    <span class="profile-id-label">User ID</span>
+                                    <span id="uiProfileUserId" class="profile-id-value">Loading…</span>
+                                </div>
+                                <div class="profile-btn-group profile-btn-group--sm">
+                                    <button id="uiProfileCopyUserId" class="profile-btn profile-btn--ghost profile-copy-btn" type="button" title="Copy user ID" aria-label="Copy user ID">Copy</button>
+                                </div>
                             </div>
-                        </div>
+                        </section>
                     </div>
 
                     <div data-profile-section="security" class="hidden">
-                        <h3 class="profile-section-title">Security</h3>
-                        <p class="profile-section-lead">End-to-end encryption is active. Keys never leave this device unencrypted.</p>
-                        <div class="profile-card profile-card-pad profile-security-grid">
-                            <span class="profile-status-pill">E2EE enabled</span>
-                            <span class="profile-status-pill">Secure connection</span>
-                            <span class="profile-status-pill">Session verified</span>
+                        <div class="profile-status-group" role="list" aria-label="Security status">
+                            <span class="profile-status-chip" role="listitem">E2EE enabled</span>
+                            <span class="profile-status-chip" role="listitem">Secure connection</span>
+                            <span class="profile-status-chip" role="listitem">Session verified</span>
                         </div>
-                        <div class="profile-card">
-                            <div class="profile-card-pad">
-                                <p class="profile-section-title" style="margin-bottom: 8px;">Encryption fingerprint</p>
-                                <p id="uiProfileFingerprint" class="profile-fingerprint">Loading…</p>
-                                <button id="uiProfileCopyFingerprint" class="profile-copy-btn" type="button" style="margin-top: 10px;">Copy fingerprint</button>
+                        <section class="profile-card profile-card--fingerprint">
+                            <div class="profile-fingerprint-head">
+                                <h3 class="profile-block-title">Encryption fingerprint</h3>
+                                <div class="profile-btn-group profile-btn-group--sm">
+                                    <button id="uiProfileCopyFingerprint" class="profile-btn profile-btn--soft" type="button">Copy</button>
+                                </div>
                             </div>
-                        </div>
+                            <p id="uiProfileFingerprint" class="profile-fingerprint">Loading…</p>
+                        </section>
                     </div>
 
                     <div data-profile-section="privacy" class="hidden">
-                        <h3 class="profile-section-title">Privacy</h3>
-                        <p class="profile-section-lead">Each option changes how this app behaves on your device right now.</p>
-                        <div class="profile-card profile-toggle-list">
+                        <section class="profile-card profile-toggle-list">
                             <label class="profile-toggle-row">
                                 <span class="profile-toggle-copy">
                                     <span class="profile-toggle-label">Show online status</span>
@@ -1127,13 +1029,11 @@
                                 </span>
                                 <input id="uiPrefTypingIndicators" type="checkbox" data-pref-key="typingIndicators">
                             </label>
-                        </div>
+                        </section>
                     </div>
 
                     <div data-profile-section="data" class="hidden">
-                        <h3 class="profile-section-title">Data &amp; storage</h3>
-                        <p class="profile-section-lead">Local storage stats and actions for this device. Clearing chat history deletes conversations on the server for all contacts.</p>
-                        <div class="profile-card">
+                        <section class="profile-card">
                             <div class="profile-stat-row">
                                 <span>Total local storage</span>
                                 <span id="uiProfileStorageUsed">Loading…</span>
@@ -1158,16 +1058,16 @@
                                 <span>Active chats</span>
                                 <span id="uiProfileCachedMedia">Loading…</span>
                             </div>
-                        </div>
-                        <div class="profile-data-actions">
+                        </section>
+                        <div class="profile-btn-group profile-btn-group--stretch" role="group" aria-label="Data actions">
                             <button id="uiProfileClearCacheBtn" class="profile-btn profile-btn--ghost" type="button">Clear drafts</button>
-                            <button id="uiProfileClearHistoryBtn" class="profile-btn profile-btn--ghost" type="button">Clear chat history</button>
-                            <button id="uiProfileExportDataBtn" class="profile-btn" type="button">Copy storage report</button>
+                            <button id="uiProfileClearHistoryBtn" class="profile-btn profile-btn--ghost" type="button">Clear history</button>
+                            <button id="uiProfileExportDataBtn" class="profile-btn profile-btn--soft" type="button">Copy report</button>
                         </div>
                     </div>
                 </div>
                 <footer class="profile-foot">
-                    <button id="uiProfileSaveBtn" class="profile-btn profile-btn--primary" type="button">Save profile</button>
+                    <button id="uiProfileSaveBtn" class="profile-btn profile-btn--primary" type="button">Save changes</button>
                 </footer>
             </div>
         </div>

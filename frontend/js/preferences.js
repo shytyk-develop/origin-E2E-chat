@@ -4,7 +4,7 @@ export const DEFAULT_PREFERENCES = {
     enterToSend: true,
     compactMode: false,
     showTimestamps: true,
-    theme: 'system', // 'light' | 'dark' | 'system'
+    theme: 'light', // 'light' | 'dark' | 'system'
     glassIntensity: 'medium', // 'low' | 'medium' | 'high'
     showOnlineStatus: true,
     readReceipts: true,

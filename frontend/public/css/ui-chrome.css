@@ -28,7 +28,7 @@
     color: var(--accent);
 }
 
-/* Composer dock — layout in app-layout.css */
+/* Composer — floating bubble lives in app-layout.css */
 .chat-main > .input-bar {
     border-bottom: none;
     border-left: none;
@@ -36,10 +36,10 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    gap: var(--space-3);
+    gap: var(--space-2);
     margin: 0;
     max-width: none;
-    width: 100%;
+    width: auto;
 }
 
 #messageInput {
@@ -52,11 +52,11 @@
 .presence-badge {
     align-items: center;
     display: inline-flex;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    font-family: var(--f-ui);
     font-size: 12px;
     font-weight: 500;
     gap: 6px;
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
     line-height: 1.2;
     text-transform: none;
 }
@@ -90,27 +90,83 @@
     color: var(--text-secondary);
 }
 
-/* Send — consistent on light/dark */
+/* ─── Composer row inside the floating bubble ─── */
+.input-row {
+    align-items: flex-end;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    gap: var(--space-1);
+    padding: 0;
+}
+
+.input-row:focus-within {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Borderless textarea inside the capsule */
+.input-row #messageInput {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 9px 6px !important;
+}
+
+.input-row #messageInput:hover:not(:disabled) {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Circular ghost icon buttons (attach / tools) */
+.input-row .btn-attach {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    color: var(--text-secondary);
+    display: inline-flex;
+    flex-shrink: 0;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
+}
+
+.input-row .btn-attach:hover:not(:disabled) {
+    background: var(--row-hover);
+    border-color: transparent;
+    color: var(--text);
+}
+
+/* Send — circular accent button with paper-plane icon */
 #sendBtn {
+    align-items: center;
     background: var(--accent) !important;
     border: none !important;
-    border-radius: 20px !important;
+    border-radius: var(--radius-pill) !important;
     color: #fff !important;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif !important;
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.01em !important;
-    text-transform: none !important;
+    display: inline-flex !important;
+    font-family: var(--f-ui) !important;
+    height: 38px;
+    justify-content: center;
+    min-width: 38px;
+    padding: 0 !important;
+    width: 38px;
+}
+
+#sendBtn .ui-icon {
+    height: 18px;
+    width: 18px;
+    /* nudge the paper-plane to feel optically centered */
+    transform: translateX(-1px);
 }
 
 #sendBtn:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent) 82%, #000) !important;
+    background: var(--accent-strong, color-mix(in srgb, var(--accent) 82%, #000)) !important;
     box-shadow: 0 4px 16px var(--accent-20) !important;
-    color: #fff !important;
-}
-
-[data-theme="light"] #sendBtn:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent) 78%, #000) !important;
     color: #fff !important;
 }
 

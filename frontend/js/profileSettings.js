@@ -144,6 +144,13 @@ export function onProfilePanelOpen() {
     hydrateData(username);
 }
 
+const PROFILE_SECTION_META = {
+    identity: ['Identity', 'Your display name, avatar, and local profile'],
+    security: ['Security', 'Encryption keys and session verification'],
+    privacy: ['Privacy', 'Control what others can see'],
+    data: ['Data & storage', 'Local usage and cleanup actions'],
+};
+
 function setSection(id) {
     const panel = document.getElementById('uiProfilePanel');
     if (!panel) return;
@@ -157,6 +164,12 @@ function setSection(id) {
     panel.querySelectorAll('[data-profile-section]').forEach((section) => {
         section.classList.toggle('hidden', section.dataset.profileSection !== id);
     });
+
+    const meta = PROFILE_SECTION_META[id] || PROFILE_SECTION_META.identity;
+    const titleEl = $p('uiProfileTitle');
+    const subEl = document.getElementById('uiProfileHeadSub');
+    if (titleEl) titleEl.textContent = meta[0];
+    if (subEl) subEl.textContent = meta[1];
 }
 
 function hydrateIdentity(username) {

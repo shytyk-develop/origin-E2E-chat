@@ -81,10 +81,10 @@
 
 /* Filled tile variant (optional) */
 .brand-logo--filled {
-    background: linear-gradient(145deg, #1b4f9c 0%, #0a84ff 100%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(145deg, var(--accent-strong, #5e6650) 0%, var(--accent, #7c8466) 100%);
+    border: 1px solid var(--login-mark-border);
     border-radius: var(--r2, 12px);
-    box-shadow: 0 4px 14px rgba(10, 132, 255, 0.22);
+    box-shadow: 0 4px 14px var(--accent-20);
 }
 
 .brand-logo--filled .brand-logo__svg {
@@ -131,5 +131,5 @@
 }
 
 [data-theme="light"] .brand-logo--filled {
-    box-shadow: 0 4px 14px rgba(0, 122, 255, 0.18);
+    box-shadow: 0 4px 14px var(--accent-20);
 }

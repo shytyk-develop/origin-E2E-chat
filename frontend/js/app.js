@@ -42,6 +42,7 @@ import {
     showToast,
     setPreferenceControls,
     clearUsersList,
+    showContactsLoading,
     updateMessageIdentity,
     updateMessageStatus,
     removeMessageElement,
@@ -111,6 +112,8 @@ import { saveHistory, loadHistory, saveKeys, loadKeys, saveDraft, loadDraft, cle
 import { initRouter, navigateTo } from './router.js';
 import { loadPreferences, applyPreferences, updatePreference } from './preferences.js';
 import { initProfileSettings } from './profileSettings.js';
+import { initLoginPage, teardownLoginPage } from './loginPage.js';
+import { playLoginSuccessReveal, resetLoginBackground } from './loginCanvas.js';
 import { getPrivacyFlags, isChatMuted, toggleChatMuted } from './privacy.js';
 import { registerShortcuts } from './shortcuts.js';
 import {
@@ -704,6 +707,14 @@ initMessageContextMenu((row) => {
 });
 initMessageActions();
 
+let loginUiMounted = false;
+
+function setAuthPending(isPending) {
+    DOM.pageLogin?.classList.toggle('is-loading', isPending);
+    DOM.btnLogin.disabled = isPending;
+    DOM.btnRegister.disabled = isPending;
+}
+
 // Main routing handler
 async function handleNavigation(view, param) {
     closeOverlaysForRouteChange();
@@ -711,24 +722,38 @@ async function handleNavigation(view, param) {
 
     if (view === 'login') {
         DOM.pageLogin.classList.remove('hidden');
+        setAuthPending(false);
+        if (!loginUiMounted) {
+            initLoginPage(DOM.pageLogin);
+            loginUiMounted = true;
+        } else {
+            resetLoginBackground(DOM.pageLogin);
+        }
     } 
-    else if (view === 'chat' || view === 'chat-user') {
-        if (!state.myUsername) {
-            navigateTo('/login', handleNavigation);
-            return;
+    else {
+        if (loginUiMounted) {
+            teardownLoginPage();
+            loginUiMounted = false;
         }
 
-        DOM.pageChat.classList.remove('hidden');
+        if (view === 'chat' || view === 'chat-user') {
+            if (!state.myUsername) {
+                navigateTo('/login', handleNavigation);
+                return;
+            }
 
-        if (view === 'chat-user' && param) {
-            const targetUser = param;
-            switchChat(targetUser);
-        } else {
-            state.currentTargetUser = null;
-            sendChatFocus(null);
-            cancelReadReceipt();
-            resetChatPanel();
-            DOM.chatWelcome.classList.remove('hidden');
+            DOM.pageChat.classList.remove('hidden');
+
+            if (view === 'chat-user' && param) {
+                const targetUser = param;
+                switchChat(targetUser);
+            } else {
+                state.currentTargetUser = null;
+                sendChatFocus(null);
+                cancelReadReceipt();
+                resetChatPanel();
+                DOM.chatWelcome.classList.remove('hidden');
+            }
         }
     }
 }
@@ -774,7 +799,9 @@ async function handleAuth(isLogin) {
                 publicKey: await importPublicKey(savedKeysJWK.publicKey),
                 privateKey: await importPrivateKey(savedKeysJWK.privateKey)
             };
-            
+
+            setAuthPending(true);
+            await playLoginSuccessReveal(DOM.pageLogin);
             finishLoginSetup(username, savedKeysJWK.publicKey);
 
         } else {
@@ -795,6 +822,7 @@ async function handleAuth(isLogin) {
             showAuthMessage("Registration successful! You can now log in.", false);
         }
     } catch (err) {
+        setAuthPending(false);
         showAuthMessage(err.message, true);
     }
 }
@@ -835,6 +863,7 @@ function finishLoginSetup(username, exportedPublicKeyJSON, targetPath = '/chat')
 
     ensureRouter();
     navigateTo(targetPath, handleNavigation);
+    showContactsLoading();
     loadSidebarChats();
     ensureRealtime();
 
@@ -1161,7 +1190,7 @@ async function switchChat(username) {
         renderMessagesList(state.chatHistory[username]);
     }
     setComposerValue(loadDraft(state.myUsername, username));
-    setDraftStatus(getComposerValue() ? "Draft restored locally" : "Cipher Stack: AES-GCM-256 + RSA-OAEP-2048");
+    setDraftStatus(getComposerValue() ? "Draft restored locally" : "End-to-end encrypted");
     flushChatHistorySave();
     markActiveChatRead();
     syncRealtimeUi();
@@ -1264,6 +1293,10 @@ window.handleSendMessage = handleSendMessage;
 // Event Listeners
 DOM.btnLogin.addEventListener('click', () => handleAuth(true));
 DOM.btnRegister.addEventListener('click', () => handleAuth(false));
+document.getElementById('loginForm')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    handleAuth(true);
+});
 DOM.usernameInput.addEventListener('input', () => {
     DOM.usernameInput.value = normalizeUsername(DOM.usernameInput.value);
 });
@@ -1436,7 +1469,7 @@ function persistCurrentDraft() {
         setDraftStatus("Draft saved locally.");
     } else {
         clearDraft(state.myUsername, state.currentTargetUser);
-        setDraftStatus("Cipher Stack: AES-GCM-256 + RSA-OAEP-2048");
+        setDraftStatus("End-to-end encrypted");
     }
 }
 

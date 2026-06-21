@@ -195,7 +195,9 @@
 }
 
 #uiDraftStatus.danger,
-#uiCharCounter.danger {
+.composer-status.danger,
+#uiCharCounter.danger,
+.composer-char-counter.danger {
     color: var(--red) !important;
 }
 
